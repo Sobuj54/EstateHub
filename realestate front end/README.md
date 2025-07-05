@@ -2,6 +2,8 @@
 
 A comprehensive real estate marketplace web application built with modern React technologies, enabling users to browse, search, and manage properties with advanced features for buyers, sellers, and agents.
 
+[EstateHub](https://estate-hub-one.vercel.app/homepage)
+
 ## 🏡 About the Application
 
 This real estate marketplace is a full-featured platform that connects buyers, sellers, and real estate agents. The application provides an intuitive interface for property discovery, detailed property information, agent management tools, and user profile customization.
@@ -21,11 +23,13 @@ This real estate marketplace is a full-featured platform that connects buyers, s
 ## 🚀 Technologies Used
 
 ### Frontend Framework
+
 - **React 18.2.0** - Modern React with functional components and hooks
 - **Vite 5.0.0** - Lightning-fast build tool and development server
 - **JavaScript** - Primary development language
 
 ### UI & Styling
+
 - **Tailwind CSS 3.4.6** - Utility-first CSS framework with advanced plugins:
   - Forms plugin for consistent form styling
   - Typography plugin for enhanced text styling
@@ -36,26 +40,32 @@ This real estate marketplace is a full-featured platform that connects buyers, s
   - Animation utilities for smooth transitions
 
 ### State Management & Routing
+
 - **Redux Toolkit 2.6.1** - Efficient state management with simplified Redux setup
 - **React Router DOM 6.0.2** - Declarative routing for single-page application navigation
 - **React Router Hash Link 2.4.3** - Smooth scrolling and anchor linking
 
 ### Data Visualization & Charts
+
 - **Recharts 2.15.2** - Composable charting library for React
 - **D3.js 7.9.0** - Powerful data visualization library for custom charts and graphs
 
 ### Form Management & Validation
+
 - **React Hook Form 7.55.0** - Performant form library with minimal re-renders
 - **Validation** - Built-in form validation and error handling
 
 ### Icons & Assets
+
 - **Lucide React 0.484.0** - Beautiful, consistent icon library
 - **Framer Motion 10.16.4** - Smooth animations and micro-interactions
 
 ### HTTP Client & API
+
 - **Axios 1.8.4** - Promise-based HTTP client for API communications
 
 ### Utilities
+
 - **Date-fns 4.1.0** - Modern date utility library for formatting and manipulation
 - **React Helmet 6.1.0** - Document head management for SEO optimization
 - **Dotenv 16.0.1** - Environment variable management
@@ -70,12 +80,14 @@ Before running the application, ensure you have the following installed:
 ## 🛠️ Installation
 
 1. **Clone the repository:**
+
    ```bash
    git clone <repository-url>
    cd realestate_marketplace
    ```
 
 2. **Install dependencies:**
+
    ```bash
    npm install
    # or
@@ -83,12 +95,14 @@ Before running the application, ensure you have the following installed:
    ```
 
 3. **Set up environment variables:**
+
    ```bash
    cp .env.example .env
    # Edit .env file with your configuration
    ```
 
 4. **Start the development server:**
+
    ```bash
    npm start
    # or
@@ -139,18 +153,21 @@ realestate_marketplace/
 ## 📚 Application Pages
 
 ### 🏠 Homepage
+
 - Hero section with property search
 - Featured properties showcase
 - Quick statistics and market insights
 - Agent spotlight section
 
 ### 🔍 Property Listings
+
 - Advanced search and filtering
 - List and map view options
 - Property sorting capabilities
 - Infinite scroll for large datasets
 
 ### 🏡 Property Details
+
 - Comprehensive property information
 - High-resolution image galleries
 - Virtual tour integration
@@ -159,6 +176,7 @@ realestate_marketplace/
 - Similar property recommendations
 
 ### 👨‍💼 Agent Dashboard
+
 - Performance metrics and analytics
 - Active listings management
 - Lead management system
@@ -166,6 +184,7 @@ realestate_marketplace/
 - Quick listing creation tools
 
 ### 👤 User Profile & Settings
+
 - Profile information management
 - Saved searches and favorite properties
 - Activity history tracking
@@ -185,6 +204,7 @@ The application uses a comprehensive design system built with Tailwind CSS:
 ## 📱 Responsive Design
 
 The application is fully responsive and optimized for:
+
 - **Mobile devices** (320px and up)
 - **Tablets** (768px and up)
 - **Desktop computers** (1024px and up)
@@ -201,6 +221,7 @@ The application is fully responsive and optimized for:
 ## 🚀 Deployment
 
 ### Build for Production
+
 ```bash
 npm run build
 ```
@@ -208,7 +229,9 @@ npm run build
 This creates an optimized build in the `dist` folder, ready for deployment.
 
 ### Environment Variables
+
 Create a `.env` file in the root directory:
+
 ```
 VITE_API_URL=your_api_url
 VITE_MAP_API_KEY=your_map_api_key
