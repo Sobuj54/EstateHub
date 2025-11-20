@@ -10,6 +10,7 @@ export interface IUser {
   avatar?: string;
   bio?: string;
   isVerified?: boolean;
+  refreshToken?: string;
 }
 
 export interface IUserMethods {

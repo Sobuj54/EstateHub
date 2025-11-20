@@ -16,6 +16,7 @@ const userSchema = new mongoose.Schema<IUser, UserModel, IUserMethods>(
       unique: true,
       lowercase: true,
       trim: true,
+      index: true,
     },
     password: {
       type: String,
@@ -33,7 +34,8 @@ const userSchema = new mongoose.Schema<IUser, UserModel, IUserMethods>(
     },
     avatar: {
       type: String,
-      default: '/assets/images/default.avif',
+      default:
+        'https://img.freepik.com/free-vector/blue-circle-with-white-user_78370-4707.jpg?semt=ais_hybrid&w=740&q=80',
     },
     bio: {
       type: String,
@@ -42,6 +44,9 @@ const userSchema = new mongoose.Schema<IUser, UserModel, IUserMethods>(
     isVerified: {
       type: Boolean,
       default: false,
+    },
+    refreshToken: {
+      type: String,
     },
   },
   {

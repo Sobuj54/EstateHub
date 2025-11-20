@@ -33,7 +33,7 @@ const handleCastError = (err: mongoose.Error.CastError): IGenericError => {
 
 const zodValidationError = (err: ZodError): IGenericError => {
   const errors: IGenericValidationError[] = err.issues.map((i) => ({
-    path: i.path[i.path.length - 1],
+    path: i.path[i.path.length - 1] || '',
     message: i.message,
   }));
   return {
