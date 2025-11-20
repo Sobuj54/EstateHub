@@ -13,7 +13,7 @@ const Header = () => {
 
   // Mock user data - in real app this would come from context/props
   const user = {
-    isAuthenticated: true,
+    isAuthenticated: false,
     role: "agent", // 'buyer', 'seller', 'agent\'name: \'John Smith',
     avatar: "/assets/images/avatar.jpg",
     name: "John Smith",
