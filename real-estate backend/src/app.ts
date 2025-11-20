@@ -6,6 +6,7 @@ const app: Application = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(express.static('public'));
 
 import allRoutes from './routes/index';
 app.use('/api/v1', allRoutes);
