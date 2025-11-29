@@ -26,3 +26,7 @@ export const loginZodSchema = z.object({
   email: z.email('Invalid email address').max(254),
   password: z.string(),
 });
+
+export const refreshTokenZodSchema = z.object({
+  refreshToken: z.string(),
+});

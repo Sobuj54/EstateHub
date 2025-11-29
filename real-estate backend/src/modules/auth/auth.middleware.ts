@@ -1,7 +1,6 @@
-/* eslint-disable no-unused-vars */
 import ApiError from '../../utils/ApiError';
 import { asyncHandler } from '../../utils/asyncHandler';
-import jwt from 'jsonwebtoken';
+import jwt, { Secret } from 'jsonwebtoken';
 import { User } from '../user/user.model';
 import { accessTokenType } from './auth.interface';
 
@@ -13,7 +12,7 @@ export const verifyJWT = asyncHandler(async (req, _, next) => {
 
   const decodedToken: accessTokenType = jwt.verify(
     token,
-    process.env.ACCESS_TOKEN_SECRET as string
+    process.env.ACCESS_TOKEN_SECRET as Secret
   ) as accessTokenType;
 
   const user = await User.findById(decodedToken?._id).select(

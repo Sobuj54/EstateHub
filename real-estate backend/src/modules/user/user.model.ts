@@ -23,6 +23,7 @@ const userSchema = new mongoose.Schema<IUser, UserModel, IUserMethods>(
       type: String,
       require: true,
       trim: true,
+      select: 0,
     },
     phone: {
       type: String,

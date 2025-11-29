@@ -1,7 +1,7 @@
 import ApiResponse from '../../utils/ApiResponse';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { cookieOptions } from './auth.constants';
-import { login, logout, register } from './auth.service';
+import { login, logout, refreshAccessToken, register } from './auth.service';
 
 const loginUser = asyncHandler(async (req, res) => {
   const { ...data } = req.body;
@@ -12,10 +12,16 @@ const loginUser = asyncHandler(async (req, res) => {
   user.refreshToken = refreshToken;
   await user.save({ validateBeforeSave: false });
 
+  const userObj = user.toObject();
+  delete userObj.refreshToken;
+  delete userObj.password;
+
   res
     .status(200)
     .cookie('refreshToken', refreshToken, cookieOptions)
-    .json(new ApiResponse(200, { user, accessToken }, 'Login successfull.'));
+    .json(
+      new ApiResponse(200, { user: userObj, accessToken }, 'Login successfull.')
+    );
 });
 
 const registerUser = asyncHandler(async (req, res) => {
@@ -34,4 +40,12 @@ const logoutUser = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, {}, 'User logged out.'));
 });
 
-export { registerUser, loginUser, logoutUser };
+const refreshToken = asyncHandler(async (req, res) => {
+  const { refreshToken } = req.cookies;
+  const result = await refreshAccessToken(refreshToken);
+  res
+    .status(200)
+    .json(new ApiResponse(200, result, 'Token refreshed successfully.'));
+});
+
+export { registerUser, loginUser, logoutUser, refreshToken };

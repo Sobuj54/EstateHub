@@ -3,7 +3,7 @@ import { ZodObject } from 'zod';
 
 export const validateZodRequest = (
   schema: ZodObject,
-  target: 'body' | 'params' | 'query' = 'body'
+  target: 'body' | 'params' | 'query' | 'cookies' = 'body'
 ): RequestHandler => {
   return async (req, res, next) => {
     try {
