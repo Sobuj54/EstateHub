@@ -15,8 +15,8 @@ export interface IUser {
 
 export interface IUserMethods {
   isPasswordCorrect(password: string): Promise<boolean>;
-  generateAccessToken(): string;
-  generateRefreshToken(): string;
+  generateAccessToken(expiresIn: string): string;
+  generateRefreshToken(duration: string): string;
 }
 
 export type UserDocument = IUser & IUserMethods & Document;

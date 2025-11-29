@@ -1,18 +1,16 @@
 import dotenv from 'dotenv';
+dotenv.config({
+  path: './.env',
+});
 import app from './app';
 import dbConnection, { disconnectDB } from './dbConnection';
 import { logError, logInfo } from './shared/logger';
 import { Server } from 'http';
 
-dotenv.config({
-  path: './.env',
-});
-
 const port = process.env.PORT || 5000;
 let server: Server;
 let shuttingDown: boolean = false;
 
-// server.ts (shutdown with logger)
 const shutdown = async (reason: string, exitCode = 0) => {
   if (shuttingDown) return;
   shuttingDown = true;
@@ -20,7 +18,6 @@ const shutdown = async (reason: string, exitCode = 0) => {
   try {
     logInfo(`Shutdown initiated: ${reason}`);
 
-    // 1) Close the HTTP server if running
     if (server) {
       await new Promise<void>((resolve, reject) => {
         server.close((closeErr) => {
@@ -34,7 +31,6 @@ const shutdown = async (reason: string, exitCode = 0) => {
       });
     }
 
-    // 2) Disconnect MongoDB
     await disconnectDB();
 
     logInfo('Shutdown completed successfully');

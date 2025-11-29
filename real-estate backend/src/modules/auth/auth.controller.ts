@@ -7,8 +7,8 @@ const loginUser = asyncHandler(async (req, res) => {
   const { ...data } = req.body;
   const user = await login(data);
 
-  const accessToken = user.generateAccessToken();
-  const refreshToken = user.generateRefreshToken();
+  const accessToken = user.generateAccessToken('15m');
+  const refreshToken = user.generateRefreshToken('7d');
   user.refreshToken = refreshToken;
   await user.save({ validateBeforeSave: false });
 

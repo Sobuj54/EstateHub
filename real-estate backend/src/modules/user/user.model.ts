@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import mongoose from 'mongoose';
 import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
+import jwt, { Secret } from 'jsonwebtoken';
 import { IUser, IUserMethods, UserDocument, UserModel } from './user.interface';
 
 const userSchema = new mongoose.Schema<IUser, UserModel, IUserMethods>(
@@ -64,28 +65,32 @@ userSchema.methods.isPasswordCorrect = async function (password: string) {
   return await bcrypt.compare(password, this.password);
 };
 
-userSchema.methods.generateAccessToken = function () {
+userSchema.methods.generateAccessToken = function (
+  duration: string = '15m'
+): string {
   return jwt.sign(
     {
       _id: this._id,
       email: this.email,
       name: this.name,
     },
-    process.env.ACCESS_TOKEN_SECRET as string,
+    process.env.ACCESS_TOKEN_SECRET as Secret,
     {
-      expiresIn: '1h',
+      expiresIn: duration as any,
     }
   );
 };
 
-userSchema.methods.generateRefreshToken = function () {
+userSchema.methods.generateRefreshToken = function (
+  duration: string = '7d'
+): string {
   return jwt.sign(
     {
       _id: this._id,
     },
-    process.env.REFRESH_TOKEN_SECRET as string,
+    process.env.REFRESH_TOKEN_SECRET as Secret,
     {
-      expiresIn: '7d',
+      expiresIn: duration as any,
     }
   );
 };
