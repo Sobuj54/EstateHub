@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import Icon from "../AppIcon";
+import useAuthContext from "hooks/useAuthContext";
+import { toast, ToastContainer } from "react-toastify";
+import useAxiosSecure from "hooks/useAxiosSecure";
 
 const Header = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -8,16 +11,12 @@ const Header = () => {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const location = useLocation();
+  const navigate = useNavigate();
   const userMenuRef = useRef(null);
   const mobileMenuRef = useRef(null);
+  const axiosSecure = useAxiosSecure();
 
-  // Mock user data - in real app this would come from context/props
-  const user = {
-    isAuthenticated: false,
-    role: "agent", // 'buyer', 'seller', 'agent\'name: \'John Smith',
-    avatar: "/assets/images/avatar.jpg",
-    name: "John Smith",
-  };
+  const { user, setUser, setToken, setLoading, loading } = useAuthContext();
 
   const navigationItems = [
     {
@@ -52,6 +51,7 @@ const Header = () => {
     },
   ];
 
+  // Close menus when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
@@ -59,7 +59,8 @@ const Header = () => {
       }
       if (
         mobileMenuRef.current &&
-        !mobileMenuRef.current.contains(event.target)
+        !mobileMenuRef.current.contains(event.target) &&
+        !event.target.closest('[aria-label="Toggle mobile menu"]')
       ) {
         setIsMobileMenuOpen(false);
       }
@@ -69,6 +70,7 @@ const Header = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Close menus on route change
   useEffect(() => {
     setIsMobileMenuOpen(false);
     setIsUserMenuOpen(false);
@@ -77,31 +79,117 @@ const Header = () => {
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      // Navigate to property listings with search query
-      window.location.href = `/property-listings?search=${encodeURIComponent(
-        searchQuery
-      )}`;
+      navigate(
+        `/property-listings?search=${encodeURIComponent(searchQuery.trim())}`
+      );
+    } else {
+      navigate("/property-listings");
     }
   };
 
-  const handleUserAction = (action) => {
-    if (action === "logout") {
-      // Handle logout logic
-      console.log("Logging out...");
+  const logout = async () => {
+    try {
+      setLoading(true);
+      await axiosSecure.post("/auth/logout");
+      setUser(null);
+      setToken(null);
+      setLoading(false);
+      navigate("/");
+      toast.success("Logout Successful!", {
+        position: "top-right",
+        autoClose: 5000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        progress: undefined,
+        theme: "colored",
+      });
+    } catch (error) {
+      setLoading(false);
+      toast.error("Logout Failed.", {
+        position: "top-right",
+        autoClose: 5000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        progress: undefined,
+        theme: "colored",
+      });
     }
+  };
+
+  const handleUserAction = async (action) => {
+    if (action === "logout") {
+      if (typeof logout === "function") {
+        await logout();
+
+        setIsUserMenuOpen(false);
+      }
+
+      return;
+    }
+
     setIsUserMenuOpen(false);
   };
 
-  const isActiveRoute = (path) => {
-    return location.pathname === path;
+  const isActiveRoute = (path) => location.pathname === path;
+
+  // decide if a navigation item should be shown for current user
+  const shouldShowNavItem = (roles = []) => {
+    if (!roles || roles.length === 0) return true;
+    if (roles.includes("all")) return true;
+    // if user not logged in, treat them as guest with no special roles
+    const role = user?.role || "guest";
+    return roles.includes(role);
   };
 
-  const shouldShowNavItem = (roles) => {
-    return roles.includes("all") || roles.includes(user.role);
+  // render user avatar or initials
+  const renderAvatar = () => {
+    if (user?.avatar) {
+      return (
+        <img
+          src={user.avatar}
+          alt={`${user.name}'s avatar`}
+          className="object-cover w-full h-full rounded-full"
+          onError={(e) => {
+            // fallback to initials if image fails
+            e.currentTarget.onerror = null;
+            e.currentTarget.src = "";
+          }}
+        />
+      );
+    }
+
+    // initials fallback
+    const initials = (user?.name || "")
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase();
+
+    return (
+      <span className="text-sm font-medium text-white">{initials || "U"}</span>
+    );
   };
 
   return (
     <header className="fixed top-0 left-0 right-0 border-b bg-surface border-border z-header">
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="colored"
+      />
       <div className="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 lg:h-18">
           {/* Logo */}
@@ -147,47 +235,51 @@ const Header = () => {
           </div>
 
           {/* Desktop Navigation */}
-          <nav className="items-center hidden space-x-6 md:flex">
-            {navigationItems.map(
-              (item) =>
-                shouldShowNavItem(item.roles) && (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium 
-                           transition-all duration-200 ease-out micro-interaction
-                           ${
-                             isActiveRoute(item.path)
-                               ? "bg-primary-100 text-primary border border-primary-500"
-                               : "text-text-secondary hover:text-text-primary hover:bg-secondary-100"
-                           }`}
-                  >
-                    <Icon name={item.icon} size={18} />
-                    <span>{item.label}</span>
-                  </Link>
-                )
+          <nav
+            className="items-center hidden space-x-6 md:flex"
+            aria-label="Main navigation"
+          >
+            {navigationItems.map((item) =>
+              shouldShowNavItem(item.roles) ? (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ease-out micro-interaction ${
+                    isActiveRoute(item.path)
+                      ? "bg-primary-100 text-primary border border-primary-500"
+                      : "text-text-secondary hover:text-text-primary hover:bg-secondary-100"
+                  }`}
+                >
+                  <Icon name={item.icon} size={18} />
+                  <span>{item.label}</span>
+                </Link>
+              ) : null
             )}
           </nav>
 
           {/* User Menu & Mobile Menu Button */}
           <div className="flex items-center space-x-4">
             {/* User Menu */}
-            {user.isAuthenticated ? (
+            {loading ? (
+              <div className="flex items-center space-x-2">
+                {/* Avatar skeleton */}
+                <div className="w-8 h-8 bg-gray-300 rounded-full animate-pulse"></div>
+                {/* Name skeleton */}
+                <div className="w-2 h-4 bg-gray-300 rounded-md animate-pulse"></div>
+              </div>
+            ) : user ? (
               <div className="relative" ref={userMenuRef}>
                 <button
-                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                  onClick={() => setIsUserMenuOpen((s) => !s)}
                   className="flex items-center p-2 space-x-2 transition-all duration-200 ease-out rounded-md hover:bg-secondary-100 micro-interaction"
                   aria-expanded={isUserMenuOpen}
                   aria-haspopup="true"
+                  aria-label="User menu"
                 >
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary">
-                    <span className="text-sm font-medium text-white">
-                      {user.name
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")}
-                    </span>
+                  <div className="flex items-center justify-center w-8 h-8 overflow-hidden rounded-full bg-primary">
+                    {renderAvatar()}
                   </div>
+                  <span className="sr-only">Open user menu</span>
                   <Icon
                     name="ChevronDown"
                     size={16}
@@ -202,18 +294,23 @@ const Header = () => {
                   <div className="absolute right-0 w-56 mt-2 border rounded-md bg-surface shadow-elevation-3 border-border z-dropdown">
                     <div className="px-4 py-3 border-b border-border">
                       <p className="text-sm font-medium text-text-primary">
-                        {user.name}
+                        {user?.name}
                       </p>
                       <p className="text-xs capitalize text-text-secondary">
-                        {user.role}
+                        {user?.role}
+                      </p>
+                      <p className="text-xs truncate text-text-secondary">
+                        {user?.email}
                       </p>
                     </div>
+
                     <div className="py-1">
                       {userMenuItems.map((item) => (
                         <div key={item.label}>
                           {item.path ? (
                             <Link
                               to={item.path}
+                              onClick={() => setIsUserMenuOpen(false)}
                               className="flex items-center px-4 py-2 space-x-3 text-sm transition-colors duration-200 text-text-secondary hover:text-text-primary hover:bg-secondary-100"
                             >
                               <Icon name={item.icon} size={16} />
@@ -243,7 +340,7 @@ const Header = () => {
                   Sign In
                 </Link>
                 <Link
-                  to="/register"
+                  to="/signup"
                   className="px-4 py-2 text-sm font-medium text-white transition-all duration-200 ease-out rounded-md bg-primary hover:bg-primary-700 micro-interaction"
                 >
                   Get Started
@@ -253,7 +350,7 @@ const Header = () => {
 
             {/* Mobile Menu Button */}
             <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              onClick={() => setIsMobileMenuOpen((s) => !s)}
               className="p-2 transition-all duration-200 ease-out rounded-md md:hidden text-text-secondary hover:text-text-primary hover:bg-secondary-100"
               aria-expanded={isMobileMenuOpen}
               aria-label="Toggle mobile menu"
@@ -289,24 +386,22 @@ const Header = () => {
           className="border-t md:hidden bg-surface border-border z-mobile-menu"
         >
           <div className="px-4 py-3 space-y-1">
-            {navigationItems.map(
-              (item) =>
-                shouldShowNavItem(item.roles) && (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={`flex items-center space-x-3 px-3 py-2 rounded-md text-base font-medium 
-                           transition-all duration-200 ease-out
-                           ${
-                             isActiveRoute(item.path)
-                               ? "bg-primary-100 text-primary border border-primary-500"
-                               : "text-text-secondary hover:text-text-primary hover:bg-secondary-100"
-                           }`}
-                  >
-                    <Icon name={item.icon} size={20} />
-                    <span>{item.label}</span>
-                  </Link>
-                )
+            {navigationItems.map((item) =>
+              shouldShowNavItem(item.roles) ? (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`flex items-center space-x-3 px-3 py-2 rounded-md text-base font-medium transition-all duration-200 ease-out ${
+                    isActiveRoute(item.path)
+                      ? "bg-primary-100 text-primary border border-primary-500"
+                      : "text-text-secondary hover:text-text-primary hover:bg-secondary-100"
+                  }`}
+                >
+                  <Icon name={item.icon} size={20} />
+                  <span>{item.label}</span>
+                </Link>
+              ) : null
             )}
           </div>
         </div>

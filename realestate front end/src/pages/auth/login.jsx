@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
-import axios from "axios";
 import { motion } from "framer-motion";
 import Icon from "../../components/AppIcon";
+import useAuthContext from "hooks/useAuthContext";
 
 const Login = () => {
   const {
@@ -13,26 +13,19 @@ const Login = () => {
   } = useForm();
   const [apiError, setApiError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const { login } = useAuthContext();
   const navigate = useNavigate();
 
   const onSubmit = async (data) => {
     setApiError("");
     try {
-      // replace with your auth endpoint
-      const res = await axios.post("/api/auth/login", {
+      const payload = {
         email: data.email,
         password: data.password,
         remember: data.remember || false,
-      });
-
-      // example: save token and redirect
-      if (res?.data?.token) {
-        // choose where to store token: httpOnly cookie from server is preferred
-        localStorage.setItem("token", res.data.token);
-      }
-
-      // redirect to homepage or dashboard
-      navigate("/homepage");
+      };
+      await login(payload);
+      navigate("/");
     } catch (err) {
       console.error(err);
       const message =

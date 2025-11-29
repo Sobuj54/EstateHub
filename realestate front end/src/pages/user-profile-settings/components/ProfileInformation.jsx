@@ -1,8 +1,12 @@
 // src/pages/user-profile-settings/components/ProfileInformation.jsx
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import Icon from "../../../components/AppIcon";
+import axios from "axios";
+import useAuthContext from "hooks/useAuthContext";
 
-const ProfileInformation = ({ user, onDataChange }) => {
+const ProfileInformation = ({ onDataChange }) => {
+  const { user } = useAuthContext();
+
   const [formData, setFormData] = useState({
     name: user?.name || "",
     email: user?.email || "",
@@ -11,16 +15,36 @@ const ProfileInformation = ({ user, onDataChange }) => {
     location: user?.location || "",
     website: user?.website || "",
   });
+
   const [avatar, setAvatar] = useState(
     user?.avatar || "/assets/images/john.avif"
   );
   const [showCropModal, setShowCropModal] = useState(false);
   const [tempImage, setTempImage] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [statusMessage, setStatusMessage] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
+
   const fileInputRef = useRef(null);
+
+  // Keep local formData in sync when context user changes (e.g. on login)
+  useEffect(() => {
+    setFormData({
+      name: user?.name || "",
+      email: user?.email || "",
+      phone: user?.phone || "",
+      bio: user?.bio || "",
+      location: user?.location || "",
+      website: user?.website || "",
+    });
+    setAvatar(user?.avatar || "/assets/images/john.avif");
+  }, [user]);
 
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-    onDataChange?.();
+    setStatusMessage(null);
+    setErrorMessage(null);
+    onDataChange?.(); // notify parent if needed
   };
 
   const handleAvatarClick = () => {
@@ -30,6 +54,11 @@ const ProfileInformation = ({ user, onDataChange }) => {
   const handleFileSelect = (event) => {
     const file = event.target.files?.[0];
     if (file && file.type.startsWith("image/")) {
+      // quick client validation
+      if (file.size > 2 * 1024 * 1024) {
+        setErrorMessage("Avatar too large (max 2MB).");
+        return;
+      }
       const reader = new FileReader();
       reader.onload = (e) => {
         setTempImage(e.target?.result);
@@ -53,6 +82,101 @@ const ProfileInformation = ({ user, onDataChange }) => {
     setTempImage(null);
   };
 
+  // Save profile (non-avatar fields). Avatar upload would require multipart/form-data and a different endpoint.
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setIsSaving(true);
+    setStatusMessage(null);
+    setErrorMessage(null);
+
+    try {
+      const payload = {
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        bio: formData.bio,
+        location: formData.location,
+        website: formData.website,
+      };
+
+      const res = await axios.patch("/api/user/profile", payload);
+
+      // success UX
+      setStatusMessage(res?.data?.message || "Profile updated successfully.");
+
+      // update auth context with returned user if backend provides it
+      const returnedUser = res?.data?.user;
+      if (returnedUser) {
+        if (typeof updateUser === "function") {
+          updateUser(returnedUser);
+        } else if (typeof setUser === "function") {
+          setUser(returnedUser);
+        } else {
+          // fallback: merge local user fields (non-ideal but functional)
+          // Note: no direct way to set context user if hook doesn't provide updater.
+          console.warn(
+            "Auth context does not expose updateUser or setUser — local UI updated only."
+          );
+        }
+      } else {
+        // If backend doesn't return full user, optimistically update local copy of form data
+        if (typeof updateUser === "function") {
+          updateUser({ ...user, ...payload });
+        } else if (typeof setUser === "function") {
+          setUser({ ...user, ...payload });
+        }
+      }
+    } catch (err) {
+      console.error("Profile update failed:", err);
+      // prefer structured error messages from server
+      const message =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        "Failed to update profile. Please try again.";
+      setErrorMessage(message);
+    } finally {
+      setIsSaving(false);
+      onDataChange?.();
+    }
+  };
+
+  const handleRemoveAvatar = () => {
+    setAvatar("/assets/images/profile_default.png");
+    // call onDataChange or optionally call avatar delete endpoint
+    onDataChange?.();
+  };
+
+  // avatar render helper
+  const renderAvatar = () => {
+    if (avatar) {
+      return (
+        <img
+          src={avatar}
+          alt="Profile"
+          className="object-cover w-full h-full transition-transform duration-200 group-hover:scale-110"
+          onError={(e) => {
+            e.currentTarget.onerror = null;
+            e.currentTarget.src = "/assets/images/john.avif";
+          }}
+        />
+      );
+    }
+
+    const initials = (formData.name || "")
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase();
+
+    return (
+      <div className="flex items-center justify-center w-full h-full text-white">
+        {initials || "U"}
+      </div>
+    );
+  };
+
   return (
     <div className="rounded-lg bg-surface shadow-elevation-1">
       {/* Header */}
@@ -65,24 +189,21 @@ const ProfileInformation = ({ user, onDataChange }) => {
         </p>
       </div>
 
-      <div className="p-6">
+      <form onSubmit={handleSave} className="p-6">
         {/* Profile Photo Section */}
         <div className="flex flex-col mb-8 sm:flex-row sm:items-center sm:space-x-6">
           <div className="relative group">
             <div
               className="w-24 h-24 overflow-hidden rounded-full cursor-pointer bg-secondary-100"
               onClick={handleAvatarClick}
+              role="button"
+              aria-label="Upload profile photo"
             >
-              <img
-                src={avatar}
-                alt="Profile"
-                className="object-cover w-full h-full transition-transform duration-200 group-hover:scale-110"
-                onError={(e) => {
-                  e.target.src = "/assets/images/john.avif";
-                }}
-              />
+              {renderAvatar()}
             </div>
+
             <button
+              type="button"
               onClick={handleAvatarClick}
               className="absolute inset-0 flex items-center justify-center transition-opacity duration-200 bg-black bg-opacity-50 rounded-full opacity-0 group-hover:opacity-100"
             >
@@ -92,23 +213,24 @@ const ProfileInformation = ({ user, onDataChange }) => {
 
           <div className="flex-1 mt-4 sm:mt-0">
             <h3 className="text-lg font-medium text-text-primary">
-              {formData.name}
+              {formData.name || user?.name}
             </h3>
             <p className="mb-3 text-sm text-text-secondary">
               Click on the photo to upload a new profile picture
             </p>
+
             <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-3">
               <button
+                type="button"
                 onClick={handleAvatarClick}
                 className="px-4 py-2 text-sm font-medium text-white transition-colors duration-200 rounded-md bg-primary hover:bg-primary-700"
               >
                 Upload Photo
               </button>
+
               <button
-                onClick={() => {
-                  setAvatar("/assets/images/profile_default.png");
-                  onDataChange?.();
-                }}
+                type="button"
+                onClick={handleRemoveAvatar}
                 className="px-4 py-2 text-sm font-medium transition-colors duration-200 border rounded-md border-border text-text-secondary hover:bg-secondary-100"
               >
                 Remove
@@ -211,7 +333,7 @@ const ProfileInformation = ({ user, onDataChange }) => {
             />
           </div>
 
-          {/* Bio */}
+          {/* Bio (agent only) */}
           {user?.role === "agent" && (
             <div className="md:col-span-2">
               <label
@@ -235,7 +357,48 @@ const ProfileInformation = ({ user, onDataChange }) => {
             </div>
           )}
         </div>
-      </div>
+
+        {/* Messages & Actions */}
+        <div className="mt-6 space-y-3">
+          {statusMessage && (
+            <div className="text-sm text-green-600">{statusMessage}</div>
+          )}
+          {errorMessage && (
+            <div className="text-sm text-red-600">{errorMessage}</div>
+          )}
+
+          <div className="flex items-center space-x-3">
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="px-4 py-2 text-sm font-medium text-white transition-colors duration-200 rounded-md bg-primary hover:bg-primary-700"
+            >
+              {isSaving ? "Saving..." : "Save changes"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                // reset local edits back to latest context user
+                setFormData({
+                  name: user?.name || "",
+                  email: user?.email || "",
+                  phone: user?.phone || "",
+                  bio: user?.bio || "",
+                  location: user?.location || "",
+                  website: user?.website || "",
+                });
+                setAvatar(user?.avatar || "/assets/images/john.avif");
+                setStatusMessage(null);
+                setErrorMessage(null);
+              }}
+              className="px-4 py-2 text-sm font-medium transition-colors duration-200 border rounded-md border-border text-text-secondary hover:bg-secondary-100"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </form>
 
       {/* Hidden File Input */}
       <input
