@@ -25,8 +25,25 @@ export const registerZodSchema = z.object({
 export const loginZodSchema = z.object({
   email: z.email('Invalid email address').max(254),
   password: z.string(),
+  remember: z.boolean(),
 });
 
 export const refreshTokenZodSchema = z.object({
   refreshToken: z.string(),
+});
+
+export const resetPasswordZodSchema = z.object({
+  token: z.string(),
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .max(128, 'Password too long')
+    .regex(
+      passwordRegex,
+      'Password must include at least one uppercase letter, one number and one special character'
+    ),
+});
+
+export const forgotPasswordZodSchema = z.object({
+  email: z.email(),
 });

@@ -9,3 +9,8 @@ export type accessTokenType = {
 export type refreshTokenType = {
   _id: Types.ObjectId | string;
 };
+
+export type resetPasswordPayload = {
+  token: string;
+  password: string;
+};

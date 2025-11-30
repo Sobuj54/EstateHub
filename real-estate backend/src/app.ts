@@ -4,7 +4,14 @@ import cookieParser from 'cookie-parser';
 
 const app: Application = express();
 
-app.use(cors());
+const allowedOrigin = 'http://localhost:5173';
+
+app.use(
+  cors({
+    origin: allowedOrigin, // must match frontend origin
+    credentials: true, // allow cookies/auth headers
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));

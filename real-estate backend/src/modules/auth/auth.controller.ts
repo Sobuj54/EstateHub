@@ -1,14 +1,25 @@
 import ApiResponse from '../../utils/ApiResponse';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { cookieOptions } from './auth.constants';
-import { login, logout, refreshAccessToken, register } from './auth.service';
+import {
+  forgotPasswordMailService,
+  login,
+  logout,
+  refreshAccessToken,
+  register,
+  resetUserPassword,
+} from './auth.service';
 
 const loginUser = asyncHandler(async (req, res) => {
-  const { ...data } = req.body;
+  const { remember, ...data } = req.body;
   const user = await login(data);
 
+  let refreshToken;
+  remember
+    ? (refreshToken = user.generateRefreshToken('30d'))
+    : (refreshToken = user.generateRefreshToken('7d'));
   const accessToken = user.generateAccessToken('15m');
-  const refreshToken = user.generateRefreshToken('7d');
+
   user.refreshToken = refreshToken;
   await user.save({ validateBeforeSave: false });
 
@@ -26,10 +37,11 @@ const loginUser = asyncHandler(async (req, res) => {
 
 const registerUser = asyncHandler(async (req, res) => {
   const { ...userData } = req.body;
-  const result = await register(userData);
+  await register(userData);
+
   res
     .status(201)
-    .json(new ApiResponse(201, result, 'User created successfully.'));
+    .json(new ApiResponse(201, null, 'User created successfully.'));
 });
 
 const logoutUser = asyncHandler(async (req, res) => {
@@ -48,4 +60,27 @@ const refreshToken = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, result, 'Token refreshed successfully.'));
 });
 
-export { registerUser, loginUser, logoutUser, refreshToken };
+const forgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+  await forgotPasswordMailService(email);
+  res
+    .status(200)
+    .json(new ApiResponse(200, null, 'Reset link sent to your email'));
+});
+
+const resetPassword = asyncHandler(async (req, res) => {
+  const { ...payload } = req.body;
+  await resetUserPassword(payload);
+  res
+    .status(200)
+    .json(new ApiResponse(200, null, 'Password reset successfull.'));
+});
+
+export {
+  registerUser,
+  loginUser,
+  logoutUser,
+  refreshToken,
+  resetPassword,
+  forgotPassword,
+};

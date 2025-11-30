@@ -1,15 +1,19 @@
 import { Router } from 'express';
 import { validateZodRequest } from '../../middlewares/zodValidationMiddleware';
 import {
+  forgotPasswordZodSchema,
   loginZodSchema,
   refreshTokenZodSchema,
   registerZodSchema,
+  resetPasswordZodSchema,
 } from './auth.validation';
 import {
+  forgotPassword,
   loginUser,
   logoutUser,
   refreshToken,
   registerUser,
+  resetPassword,
 } from './auth.controller';
 import { verifyJWT } from './auth.middleware';
 
@@ -24,5 +28,11 @@ router.route('/logout').post(verifyJWT, logoutUser);
 router
   .route('/refresh-token')
   .get(validateZodRequest(refreshTokenZodSchema, 'cookies'), refreshToken);
+router
+  .route('/forgot-password')
+  .post(validateZodRequest(forgotPasswordZodSchema), forgotPassword);
+router
+  .route('/reset-password')
+  .post(validateZodRequest(resetPasswordZodSchema), resetPassword);
 
 export const authRoutes = router;
