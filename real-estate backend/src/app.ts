@@ -4,7 +4,7 @@ import cookieParser from 'cookie-parser';
 
 const app: Application = express();
 
-const allowedOrigin = 'http://localhost:5173';
+const allowedOrigin = process.env.CLIENT_URL;
 
 app.use(
   cors({
@@ -14,11 +14,14 @@ app.use(
 );
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static('public'));
+// app.use(express.static('public'));
 app.use(cookieParser());
 
 import allRoutes from './routes/index';
 app.use('/api/v1', allRoutes);
+
+app.get('/health', (_, res) => res.json({ ok: true }));
+app.get('/', (_, res) => res.json({ status: 'Server is running' }));
 
 // ------------------- Not Found Handler -------------------
 // Forward 404 to error handler for consistency
