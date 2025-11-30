@@ -27,7 +27,6 @@ const Login = () => {
       await login(payload);
       navigate("/");
     } catch (err) {
-      console.error(err);
       const message =
         err?.response?.data?.message || "Login failed. Please try again.";
       setApiError(message);

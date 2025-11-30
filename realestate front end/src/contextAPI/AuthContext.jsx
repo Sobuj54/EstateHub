@@ -10,19 +10,14 @@ const AuthProvider = ({ children }) => {
   const url = import.meta.env.VITE_API;
 
   const login = async (payload) => {
-    try {
-      setLoading(true);
-      const res = await axios.post(`${url}/auth/login`, payload, {
-        withCredentials: true,
-      });
-      setUser(res.data.data.user);
-      setToken(res.data.data.accessToken);
-      setLoading(false);
-      return res;
-    } catch (error) {
-      setLoading(false);
-      return error;
-    }
+    setLoading(true);
+    const res = await axios.post(`${url}/auth/login`, payload, {
+      withCredentials: true,
+    });
+    setUser(res.data.data.user);
+    setToken(res.data.data.accessToken);
+    setLoading(false);
+    return res;
   };
 
   const userStatus = async () => {

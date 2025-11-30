@@ -3,10 +3,11 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import axios from "axios";
 import { motion } from "framer-motion";
-import Icon from "../../components/AppIcon";
+import Icon from "components/AppIcon";
+import { Link } from "react-router-dom";
 
 const ResetPassword = () => {
-  const { token } = useParams(); // Assuming route: /reset-password/:token
+  const { token } = useParams();
   const navigate = useNavigate();
 
   const {
@@ -18,6 +19,11 @@ const ResetPassword = () => {
 
   const [apiError, setApiError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const url = import.meta.env.VITE_API;
+
+  // NEW: show/hide state for both fields
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const password = watch("password", "");
 
@@ -37,7 +43,7 @@ const ResetPassword = () => {
     setApiError("");
     setSuccessMessage("");
     try {
-      const res = await axios.post("/api/auth/reset-password", {
+      const res = await axios.post(`${url}/auth/reset-password`, {
         token,
         password: data.password,
       });
@@ -85,20 +91,33 @@ const ResetPassword = () => {
             >
               New Password
             </label>
-            <input
-              id="password"
-              type="password"
-              {...register("password", {
-                required: "Password is required",
-                minLength: {
-                  value: 8,
-                  message: "Password must be at least 8 characters",
-                },
-              })}
-              className="w-full px-4 py-3 transition duration-150 bg-white border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-              placeholder="Create a strong password"
-              aria-invalid={errors.password ? "true" : "false"}
-            />
+
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                {...register("password", {
+                  required: "Password is required",
+                  minLength: {
+                    value: 8,
+                    message: "Password must be at least 8 characters",
+                  },
+                })}
+                className="w-full px-4 py-3 transition duration-150 bg-white border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                placeholder="Create a strong password"
+                aria-invalid={errors.password ? "true" : "false"}
+                onChange={() => setApiError("")}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((s) => !s)}
+                className="absolute inset-y-0 flex items-center px-1 right-3 text-text-secondary"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                <Icon name={showPassword ? "EyeOff" : "Eye"} size={18} />
+              </button>
+            </div>
+
             <div className="flex items-center justify-between mt-2 text-xs text-text-secondary">
               <div>Strength: {passwordStrength(password).label}</div>
               <div className="w-24 h-2 ml-3 overflow-hidden bg-gray-200 rounded">
@@ -125,17 +144,35 @@ const ResetPassword = () => {
             >
               Confirm Password
             </label>
-            <input
-              id="confirmPassword"
-              type="password"
-              {...register("confirmPassword", {
-                required: "Please confirm your password",
-                validate: (val) => val === password || "Passwords do not match",
-              })}
-              className="w-full px-4 py-3 transition duration-150 bg-white border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-              placeholder="Repeat your password"
-              aria-invalid={errors.confirmPassword ? "true" : "false"}
-            />
+
+            <div className="relative">
+              <input
+                id="confirmPassword"
+                type={showConfirmPassword ? "text" : "password"}
+                {...register("confirmPassword", {
+                  required: "Please confirm your password",
+                  validate: (val) =>
+                    val === password || "Passwords do not match",
+                })}
+                className="w-full px-4 py-3 transition duration-150 bg-white border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                placeholder="Repeat your password"
+                aria-invalid={errors.confirmPassword ? "true" : "false"}
+                onChange={() => setApiError("")}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword((s) => !s)}
+                className="absolute inset-y-0 flex items-center px-1 right-3 text-text-secondary"
+                aria-label={
+                  showConfirmPassword
+                    ? "Hide confirm password"
+                    : "Show confirm password"
+                }
+              >
+                <Icon name={showConfirmPassword ? "EyeOff" : "Eye"} size={18} />
+              </button>
+            </div>
+
             {errors.confirmPassword && (
               <p className="mt-1 text-xs text-red-600">
                 {errors.confirmPassword.message}

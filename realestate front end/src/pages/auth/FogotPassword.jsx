@@ -14,14 +14,16 @@ const ForgotPassword = () => {
 
   const [apiError, setApiError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const url = import.meta.env.VITE_API;
 
   const onSubmit = async (data) => {
     setApiError("");
     setSuccessMessage("");
     try {
-      const res = await axios.post("/api/auth/forgot-password", {
+      const res = await axios.post(`${url}/auth/forgot-password`, {
         email: data.email,
       });
+      console.log(res);
 
       if (res?.data?.message) {
         setSuccessMessage(res.data.message);
