@@ -1,5 +1,5 @@
 // src/Routes.jsx
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import { BrowserRouter, Routes as RouterRoutes, Route } from "react-router-dom";
 import ScrollToTop from "components/ScrollToTop";
 import ErrorBoundary from "components/ErrorBoundary";
@@ -8,35 +8,70 @@ import ErrorBoundary from "components/ErrorBoundary";
 import Homepage from "pages/homepage";
 import PropertyListings from "pages/property-listings";
 import PropertyDetails from "pages/property-details";
-import AgentDashboard from "pages/agent-dashboard";
-import UserProfileSettings from "pages/user-profile-settings";
 import NotFound from "pages/NotFound";
 import Login from "pages/auth/login";
 import Signup from "pages/auth/Register";
 import ForgotPassword from "pages/auth/FogotPassword";
 import ResetPassword from "pages/auth/ResetPassword";
+import Unauthorized from "pages/unauthorized/Unauthorized";
+import ProtectedRoute from "components/ProtectedRoute";
+import MemberDashboard from "pages/member-dashboard/MemberDashboard";
+
+const AdminRoutes = lazy(() => import("AdminRoutes"));
+const UserProfileSettings = lazy(() => import("pages/user-profile-settings"));
+const AgentDashboard = lazy(() => import("pages/agent-dashboard"));
 
 const Routes = () => {
   return (
     <BrowserRouter>
       <ErrorBoundary>
         <ScrollToTop />
-        <RouterRoutes>
-          <Route path="/" element={<Homepage />} />
-          <Route path="/homepage" element={<Homepage />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password/:token" element={<ResetPassword />} />
-          <Route path="/property-listings" element={<PropertyListings />} />
-          <Route path="/property-details" element={<PropertyDetails />} />
-          <Route path="/agent-dashboard" element={<AgentDashboard />} />
-          <Route
-            path="/user-profile-settings"
-            element={<UserProfileSettings />}
-          />
-          <Route path="*" element={<NotFound />} />
-        </RouterRoutes>
+        <Suspense fallback={<div className="p-8 text-center">Loading...</div>}>
+          <RouterRoutes>
+            <Route path="/" element={<Homepage />} />
+            <Route path="/homepage" element={<Homepage />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password/:token" element={<ResetPassword />} />
+            <Route path="/property-listings" element={<PropertyListings />} />
+            <Route path="/property-details" element={<PropertyDetails />} />
+            <Route
+              path="/agent-dashboard/*"
+              element={
+                <ProtectedRoute allow={["agent"]}>
+                  <AgentDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/*"
+              element={
+                <ProtectedRoute allow={["admin", "super-admin"]}>
+                  <AdminRoutes />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/member-dashboard"
+              element={
+                <ProtectedRoute allow={["member"]}>
+                  <MemberDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/user-profile-settings"
+              element={
+                <ProtectedRoute>
+                  <UserProfileSettings />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/unauthorized" element={<Unauthorized />} />
+            <Route path="*" element={<NotFound />} />
+          </RouterRoutes>
+        </Suspense>
       </ErrorBoundary>
     </BrowserRouter>
   );

@@ -12,26 +12,24 @@ import ActivityHistory from "./components/ActivityHistory";
 import MobileTabNavigation from "./components/MobileTabNavigation";
 import DesktopTabNavigation from "./components/DesktopTabNavigation";
 import { Helmet } from "react-helmet";
+import useAuthContext from "hooks/useAuthContext";
+
+/**
+ * UserProfileSettings
+ * - Uses real auth context instead of dummy data
+ * - Keeps your existing tab / save UX (auto-save simulation)
+ * - Exports real user data from auth context
+ */
 
 const UserProfileSettings = () => {
+  const { user, loading: authLoading, userStatus } = useAuthContext();
+
   const [activeTab, setActiveTab] = useState("profile");
-  const [isLoading, setIsLoading] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [autoSaveStatus, setAutoSaveStatus] = useState("saved"); // 'saving', 'saved', 'error'
+  const [autoSaveStatus, setAutoSaveStatus] = useState("saved");
 
-  // Mock user data - in real app this would come from context/state management
-  const [user] = useState({
-    id: "123",
-    role: "agent", // 'buyer', 'seller', 'agent'
-    name: "John Smith",
-    email: "john.smith@example.com",
-    phone: "+1 (555) 123-4567",
-    avatar: "/assets/images/profile_default.png",
-    bio: "Experienced real estate agent with 10+ years in luxury properties.",
-    isVerified: true,
-  });
-
+  // Tabs: roles use your actual roles: 'member', 'agent', 'admin', 'super_admin'
   const tabs = [
     {
       id: "profile",
@@ -52,14 +50,14 @@ const UserProfileSettings = () => {
       label: "Saved Searches",
       icon: "Search",
       component: SavedSearches,
-      roles: ["buyer"],
+      roles: ["member"], // previously 'buyer' -> mapped to 'member'
     },
     {
       id: "favorites",
       label: "Favorite Properties",
       icon: "Heart",
       component: FavoriteProperties,
-      roles: ["buyer", "seller"],
+      roles: ["member", "agent", "seller"],
     },
     {
       id: "business",
@@ -91,32 +89,63 @@ const UserProfileSettings = () => {
     },
   ];
 
-  const filteredTabs = tabs.filter(
-    (tab) => tab.roles.includes("all") || tab.roles.includes(user?.role)
-  );
+  // Helper: determine if a tab is visible for current user role
+  const tabVisibleForUser = (tab, userRole) => {
+    if (!tab.roles || tab.roles.includes("all")) return true;
+    if (!userRole) return false;
+    return tab.roles.includes(userRole);
+  };
+
+  // compute filteredTabs from real auth user
+  const filteredTabs = tabs.filter((tab) => {
+    if (!user) {
+      // when user is not loaded yet, keep universal tabs only
+      return tab.roles.includes("all");
+    }
+    return tabVisibleForUser(tab, user.role);
+  });
 
   useEffect(() => {
-    // Simulate initial data loading
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 800);
+    // Page skeleton while component mounts and auth resolves.
+    // Wait for auth to resolve (or at most 1s) so UI doesn't flash.
+    let timer = null;
+
+    if (authLoading) {
+      setIsLoading(true);
+      // Will be cleared when authLoading becomes false via next effect
+    } else {
+      // Give a tiny fade-in feel
+      timer = setTimeout(() => setIsLoading(false), 300);
+    }
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [authLoading]);
 
   useEffect(() => {
-    // Auto-save functionality
+    // Auto-save functionality — we keep your existing simulated save behavior,
+    // but you can change this to call real API to persist changes.
     if (hasUnsavedChanges) {
       setAutoSaveStatus("saving");
-      const saveTimer = setTimeout(() => {
-        // Simulate API call
-        setAutoSaveStatus("saved");
-        setHasUnsavedChanges(false);
-      }, 2000);
+
+      // Simulated API save: you can replace this with an actual save call.
+      const saveTimer = setTimeout(async () => {
+        try {
+          // Optionally: if you have an endpoint to refresh user status after internal saves:
+          if (typeof userStatus === "function") {
+            // refresh auth user info from backend
+            await userStatus();
+          }
+          setAutoSaveStatus("saved");
+          setHasUnsavedChanges(false);
+        } catch (err) {
+          console.error("Auto-save failed", err);
+          setAutoSaveStatus("error");
+        }
+      }, 1200);
 
       return () => clearTimeout(saveTimer);
     }
-  }, [hasUnsavedChanges]);
+  }, [hasUnsavedChanges, userStatus]);
 
   const handleTabChange = (tabId) => {
     if (hasUnsavedChanges) {
@@ -136,13 +165,20 @@ const UserProfileSettings = () => {
   };
 
   const handleDataChange = () => {
+    // Called by child components to mark something dirty
     setHasUnsavedChanges(true);
   };
 
   const handleExportData = () => {
-    // Simulate data export
+    // Export user data from real auth context (if available)
+    const exportUser = user || {
+      id: "unknown",
+      name: "guest",
+      email: "",
+    };
+
     const exportData = {
-      profile: user,
+      profile: exportUser,
       exportDate: new Date().toISOString(),
       dataType: "personal_data",
     };
@@ -161,11 +197,13 @@ const UserProfileSettings = () => {
     URL.revokeObjectURL(url);
   };
 
-  const ActiveTabComponent = filteredTabs.find(
-    (tab) => tab.id === activeTab
-  )?.component;
+  // Active component to render for the tab
+  const ActiveTabComponent =
+    filteredTabs.find((tab) => tab.id === activeTab)?.component ||
+    ProfileInformation;
 
-  if (isLoading) {
+  // If auth loading show skeleton (we already have isLoading skeleton)
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-background">
         <Header />
@@ -206,6 +244,7 @@ const UserProfileSettings = () => {
     );
   }
 
+  // Main UI (user present)
   return (
     <>
       <Helmet>

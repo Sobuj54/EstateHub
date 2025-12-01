@@ -189,6 +189,54 @@ const Login = () => {
             Sign up
           </Link>
         </div>
+
+        <div className="max-w-md p-4 mx-auto mt-6 border-l-4 rounded-md shadow-sm border-primary bg-primary-50">
+          <div className="flex items-center mb-2">
+            <svg
+              className="w-5 h-5 mr-2 text-primary"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M13 16h-1v-4h-1m1-4h.01M12 12v.01M12 12v0"
+              ></path>
+            </svg>
+            <p className="text-sm font-semibold text-primary">
+              Test Accounts for Quick Login
+            </p>
+          </div>
+
+          <ul className="space-y-1 text-sm text-text-primary">
+            <li>
+              <span className="font-medium">Admin:</span>
+              <code className="bg-white px-1 py-0.5 rounded">
+                admin@gmail.com
+              </code>
+              , Password:{" "}
+              <code className="bg-white px-1 py-0.5 rounded">Strong$1</code>
+            </li>
+            <li>
+              <span className="font-medium">Member:</span>
+              <code className="bg-white px-1 py-0.5 rounded">
+                member@gmail.com
+              </code>
+              , Password:{" "}
+              <code className="bg-white px-1 py-0.5 rounded">Strong$1</code>
+            </li>
+            <li>
+              <span className="font-medium">Agent:</span>
+              <code className="bg-white px-1 py-0.5 rounded">
+                agent@gmail.com
+              </code>
+              , Password:{" "}
+              <code className="bg-white px-1 py-0.5 rounded">Strong$1</code>
+            </li>
+          </ul>
+        </div>
       </motion.div>
     </div>
   );

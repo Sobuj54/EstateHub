@@ -5,7 +5,7 @@ export const AuthContext = createContext(null);
 
 const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [token, setToken] = useState(null);
   const url = import.meta.env.VITE_API;
 
@@ -39,7 +39,7 @@ const AuthProvider = ({ children }) => {
   }, []);
 
   const authInfo = {
-    user: user,
+    user,
     setUser,
     loading,
     setLoading,

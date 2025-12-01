@@ -35,6 +35,11 @@ const Header = () => {
 
   const userMenuItems = [
     {
+      label: "Dashboard",
+      action: "dashboard",
+      icon: "LayoutDashboard",
+    },
+    {
       label: "Profile & Settings",
       path: "/user-profile-settings",
       icon: "User",
@@ -124,10 +129,22 @@ const Header = () => {
     if (action === "logout") {
       if (typeof logout === "function") {
         await logout();
-
         setIsUserMenuOpen(false);
       }
+      return;
+    }
 
+    if (action === "dashboard") {
+      // Navigate to role-specific dashboard
+      const role = user?.role;
+      let dashboardPath = "/"; // default fallback
+      if (role === "agent") dashboardPath = "/agent-dashboard";
+      else if (role === "member") dashboardPath = "/member-dashboard";
+      else if (role === "admin") dashboardPath = "/admin/dashboard";
+      else if (role === "super_admin") dashboardPath = "/super-admin-dashboard";
+
+      navigate(dashboardPath);
+      setIsUserMenuOpen(false);
       return;
     }
 

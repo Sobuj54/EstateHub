@@ -21,7 +21,7 @@ const ResetPassword = () => {
   const [successMessage, setSuccessMessage] = useState("");
   const url = import.meta.env.VITE_API;
 
-  // NEW: show/hide state for both fields
+  // show/hide state
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
@@ -62,6 +62,20 @@ const ResetPassword = () => {
     }
   };
 
+  // Grab the registered props for password & confirm so we can call their handlers
+  const pwdReg = register("password", {
+    required: "Password is required",
+    minLength: {
+      value: 8,
+      message: "Password must be at least 8 characters",
+    },
+  });
+
+  const confirmReg = register("confirmPassword", {
+    required: "Please confirm your password",
+    validate: (val) => val === password || "Passwords do not match",
+  });
+
   return (
     <div className="flex items-center justify-center min-h-screen px-4 bg-background">
       <motion.div
@@ -96,17 +110,18 @@ const ResetPassword = () => {
               <input
                 id="password"
                 type={showPassword ? "text" : "password"}
-                {...register("password", {
-                  required: "Password is required",
-                  minLength: {
-                    value: 8,
-                    message: "Password must be at least 8 characters",
-                  },
-                })}
+                /* spread RHF props first */
+                {...pwdReg}
+                /* then combine the registered onChange with your custom logic */
+                onChange={(e) => {
+                  // call RHF's onChange so it updates internal state
+                  if (typeof pwdReg.onChange === "function") pwdReg.onChange(e);
+                  // your custom behavior
+                  setApiError("");
+                }}
                 className="w-full px-4 py-3 transition duration-150 bg-white border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                 placeholder="Create a strong password"
                 aria-invalid={errors.password ? "true" : "false"}
-                onChange={() => setApiError("")}
               />
               <button
                 type="button"
@@ -149,15 +164,15 @@ const ResetPassword = () => {
               <input
                 id="confirmPassword"
                 type={showConfirmPassword ? "text" : "password"}
-                {...register("confirmPassword", {
-                  required: "Please confirm your password",
-                  validate: (val) =>
-                    val === password || "Passwords do not match",
-                })}
+                {...confirmReg}
+                onChange={(e) => {
+                  if (typeof confirmReg.onChange === "function")
+                    confirmReg.onChange(e);
+                  setApiError("");
+                }}
                 className="w-full px-4 py-3 transition duration-150 bg-white border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                 placeholder="Repeat your password"
                 aria-invalid={errors.confirmPassword ? "true" : "false"}
-                onChange={() => setApiError("")}
               />
               <button
                 type="button"
@@ -207,12 +222,12 @@ const ResetPassword = () => {
                     r="10"
                     stroke="currentColor"
                     strokeWidth="4"
-                  ></circle>
+                  />
                   <path
                     className="opacity-75"
                     fill="currentColor"
                     d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                  ></path>
+                  />
                 </svg>
                 Resetting...
               </>
