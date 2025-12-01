@@ -18,7 +18,14 @@ const loginUser = asyncHandler(async (req, res) => {
   remember
     ? (refreshToken = user.generateRefreshToken('30d'))
     : (refreshToken = user.generateRefreshToken('7d'));
-  const accessToken = user.generateAccessToken('15m');
+  const accessToken = user.generateAccessToken('10m');
+
+  // Default 7 days
+  const defaultMaxAge = 7 * 24 * 60 * 60 * 1000;
+
+  // Remember me = 30 days
+  const rememberMaxAge = 30 * 24 * 60 * 60 * 1000;
+  const maxAge = remember ? rememberMaxAge : defaultMaxAge;
 
   user.refreshToken = refreshToken;
   await user.save({ validateBeforeSave: false });
@@ -29,7 +36,7 @@ const loginUser = asyncHandler(async (req, res) => {
 
   res
     .status(200)
-    .cookie('refreshToken', refreshToken, cookieOptions)
+    .cookie('refreshToken', refreshToken, { ...cookieOptions, maxAge })
     .json(
       new ApiResponse(200, { user: userObj, accessToken }, 'Login successfull.')
     );
@@ -48,7 +55,7 @@ const logoutUser = asyncHandler(async (req, res) => {
   await logout(req.user?._id as string);
   res
     .status(200)
-    .clearCookie('refreshToken', cookieOptions)
+    .clearCookie('refreshToken', { ...cookieOptions, maxAge: 0 })
     .json(new ApiResponse(200, {}, 'User logged out.'));
 });
 

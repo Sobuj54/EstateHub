@@ -52,7 +52,7 @@ const refreshAccessToken = async (
   );
   if (!user) throw new ApiError(401, 'Invalid user');
 
-  const accessToken = user.generateAccessToken('15m');
+  const accessToken = user.generateAccessToken('10m');
 
   return { user, accessToken };
 };
