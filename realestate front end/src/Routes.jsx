@@ -16,6 +16,7 @@ import ResetPassword from "pages/auth/ResetPassword";
 import Unauthorized from "pages/unauthorized/Unauthorized";
 import ProtectedRoute from "components/ProtectedRoute";
 import MemberDashboard from "pages/member-dashboard/MemberDashboard";
+import MemberRoutes from "MemberRoutes";
 
 const AdminRoutes = lazy(() => import("AdminRoutes"));
 const UserProfileSettings = lazy(() => import("pages/user-profile-settings"));
@@ -45,14 +46,7 @@ const Routes = () => {
               }
             />
             <Route path="/admin/*" element={<AdminRoutes />} />
-            <Route
-              path="/member-dashboard"
-              element={
-                <ProtectedRoute allow={["member"]}>
-                  <MemberDashboard />
-                </ProtectedRoute>
-              }
-            />
+            <Route path="/member/*" element={<MemberRoutes />} />
             <Route
               path="/user-profile-settings"
               element={
