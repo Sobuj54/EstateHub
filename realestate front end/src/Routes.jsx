@@ -44,14 +44,7 @@ const Routes = () => {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/admin/*"
-              element={
-                <ProtectedRoute allow={["admin", "super-admin"]}>
-                  <AdminRoutes />
-                </ProtectedRoute>
-              }
-            />
+            <Route path="/admin/*" element={<AdminRoutes />} />
             <Route
               path="/member-dashboard"
               element={

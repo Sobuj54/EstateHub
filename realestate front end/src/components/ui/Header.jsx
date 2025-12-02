@@ -364,16 +364,6 @@ const Header = () => {
                 </Link>
               </div>
             )}
-
-            {/* Mobile Menu Button */}
-            <button
-              onClick={() => setIsMobileMenuOpen((s) => !s)}
-              className="p-2 transition-all duration-200 ease-out rounded-md md:hidden text-text-secondary hover:text-text-primary hover:bg-secondary-100"
-              aria-expanded={isMobileMenuOpen}
-              aria-label="Toggle mobile menu"
-            >
-              <Icon name={isMobileMenuOpen ? "X" : "Menu"} size={24} />
-            </button>
           </div>
         </div>
 
@@ -395,34 +385,6 @@ const Header = () => {
           </form>
         </div>
       </div>
-
-      {/* Mobile Menu */}
-      {isMobileMenuOpen && (
-        <div
-          ref={mobileMenuRef}
-          className="border-t md:hidden bg-surface border-border z-mobile-menu"
-        >
-          <div className="px-4 py-3 space-y-1">
-            {navigationItems.map((item) =>
-              shouldShowNavItem(item.roles) ? (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className={`flex items-center space-x-3 px-3 py-2 rounded-md text-base font-medium transition-all duration-200 ease-out ${
-                    isActiveRoute(item.path)
-                      ? "bg-primary-100 text-primary border border-primary-500"
-                      : "text-text-secondary hover:text-text-primary hover:bg-secondary-100"
-                  }`}
-                >
-                  <Icon name={item.icon} size={20} />
-                  <span>{item.label}</span>
-                </Link>
-              ) : null
-            )}
-          </div>
-        </div>
-      )}
     </header>
   );
 };

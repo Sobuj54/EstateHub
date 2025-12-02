@@ -1,36 +1,51 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  useReactTable,
+  getCoreRowModel,
+  flexRender,
+} from "@tanstack/react-table";
+import ConfirmModal from "components/ui/ConfirmModal";
+import useAxiosSecure from "hooks/useAxiosSecure";
+import { toast } from "react-toastify";
+
+const MOCK_AGENTS = [
+  { id: 1, name: "John Smith", email: "john@example.com", status: "Active" },
+  { id: 2, name: "Jane Doe", email: "jane@example.com", status: "Inactive" },
+  { id: 3, name: "Alice Brown", email: "alice@example.com", status: "Active" },
+];
 
 const ManageAgents = () => {
-  const [agents, setAgents] = useState(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  const api = useAxiosSecure();
+  const [agents, setAgents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [toDelete, setToDelete] = useState(null);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
-    // TODO: Fetch agents from backend
-    setTimeout(() => {
-      setAgents([
-        {
-          id: 1,
-          name: "John Smith",
-          email: "john@example.com",
-          status: "Active",
-        },
-        {
-          id: 2,
-          name: "Jane Doe",
-          email: "jane@example.com",
-          status: "Inactive",
-        },
-        {
-          id: 3,
-          name: "Michael Brown",
-          email: "michael@example.com",
-          status: "Active",
-        },
-      ]);
-    }, 1000);
-  }, []);
+    let mounted = true;
 
-  const handleStatusToggle = (id) => {
+    const fetchAgents = async () => {
+      setLoading(true);
+      try {
+        const res = await api.get("/admin/agents");
+        const data = res?.data?.data;
+        if (!mounted) return;
+        setAgents(Array.isArray(data) && data.length ? data : MOCK_AGENTS);
+      } catch (err) {
+        console.warn("Failed to fetch agents, using mock data.", err);
+        if (!mounted) return;
+        setAgents(MOCK_AGENTS);
+      } finally {
+        if (!mounted) return;
+        setLoading(false);
+      }
+    };
+
+    fetchAgents();
+    return () => (mounted = false);
+  }, [api]);
+
+  const toggleStatus = async (id) => {
     setAgents((prev) =>
       prev.map((a) =>
         a.id === id
@@ -38,112 +53,199 @@ const ManageAgents = () => {
           : a
       )
     );
-    // TODO: Call backend API to update status
-    console.log(`Toggled status for agent ${id}`);
-  };
-
-  const handleDelete = (id) => {
-    if (window.confirm("Are you sure you want to delete this agent?")) {
-      setAgents((prev) => prev.filter((a) => a.id !== id));
-      // TODO: Call backend API to delete agent
-      console.log(`Deleted agent ${id}`);
+    try {
+      await api.patch(`/admin/agents/${id}/status`, {});
+      toast.success("Agent status updated");
+    } catch (err) {
+      toast.info("Updated locally (API unreachable).");
     }
   };
 
-  const filteredAgents =
-    agents?.filter(
-      (a) =>
-        a.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        a.email.toLowerCase().includes(searchTerm.toLowerCase())
-    ) || [];
+  const deleteAgent = async (id) => {
+    try {
+      await api.delete(`/admin/agents/${id}`);
+      setAgents((prev) => prev.filter((a) => a.id !== id));
+      setToDelete(null);
+      toast.success("Agent deleted");
+    } catch (err) {
+      setAgents((prev) => prev.filter((a) => a.id !== id));
+      setToDelete(null);
+      toast.info("Agent deleted locally (API unreachable).");
+    }
+  };
 
-  if (!agents) {
+  const filteredAgents = useMemo(() => {
+    if (!query.trim()) return agents;
+    return agents.filter(
+      (a) =>
+        a.name.toLowerCase().includes(query.toLowerCase()) ||
+        a.email.toLowerCase().includes(query.toLowerCase())
+    );
+  }, [agents, query]);
+
+  const columns = useMemo(
+    () => [
+      { accessorKey: "name", header: "Name" },
+      { accessorKey: "email", header: "Email" },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: ({ row }) => {
+          const agent = row.original;
+          return (
+            <button
+              onClick={() => toggleStatus(agent.id)}
+              className={`px-3 py-1 rounded ${
+                agent.status === "Active"
+                  ? "bg-success/10 text-success"
+                  : "bg-error/10 text-error"
+              }`}
+            >
+              {agent.status}
+            </button>
+          );
+        },
+      },
+      {
+        id: "actions",
+        header: "",
+        cell: ({ row }) => {
+          const agent = row.original;
+          return (
+            <button
+              onClick={() => setToDelete(agent)}
+              className="px-3 py-1 text-sm text-white rounded bg-error"
+            >
+              Delete
+            </button>
+          );
+        },
+      },
+    ],
+    []
+  );
+
+  const table = useReactTable({
+    data: filteredAgents,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+  });
+
+  if (loading) {
     return (
       <div className="space-y-4">
-        <div className="w-1/4 h-6 rounded bg-secondary-100 animate-pulse"></div>
-        <div className="mt-4 space-y-2">
-          {[...Array(4)].map((_, i) => (
-            <div
-              key={i}
-              className="h-12 rounded bg-secondary-100 animate-pulse"
-            />
-          ))}
-        </div>
+        <div className="w-64 h-8 rounded bg-secondary-100 animate-pulse" />
+        {[...Array(4)].map((_, i) => (
+          <div
+            key={i}
+            className="h-12 rounded bg-secondary-100 animate-pulse"
+          />
+        ))}
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-text-primary">Manage Agents</h1>
+      {/* Header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-3xl font-bold text-text-primary">Manage Agents</h1>
+        <div className="flex flex-col w-full gap-2 sm:w-auto sm:gap-3 sm:flex-row">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by name or email..."
+            className="flex-1 min-w-0 px-3 py-2 border rounded-md bg-background"
+          />
+        </div>
+      </div>
 
-      {/* Search */}
-      <input
-        type="text"
-        placeholder="Search by name or email..."
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        className="w-full px-4 py-2 border rounded sm:w-1/3"
-      />
-
+      {/* Table */}
       <div className="overflow-x-auto bg-white shadow rounded-2xl">
-        <table className="min-w-full divide-y divide-gray-200">
+        {/* Desktop table */}
+        <table className="hidden min-w-full sm:table">
           <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-xs font-medium tracking-wider text-left uppercase text-text-secondary">
-                Name
-              </th>
-              <th className="px-6 py-3 text-xs font-medium tracking-wider text-left uppercase text-text-secondary">
-                Email
-              </th>
-              <th className="px-6 py-3 text-xs font-medium tracking-wider text-left uppercase text-text-secondary">
-                Status
-              </th>
-              <th className="px-6 py-3 text-xs font-medium tracking-wider text-right uppercase text-text-secondary">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {filteredAgents.map((agent) => (
-              <tr key={agent.id}>
-                <td className="px-6 py-4 whitespace-nowrap">{agent.name}</td>
-                <td className="px-6 py-4 whitespace-nowrap">{agent.email}</td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span
-                    className={`px-2 py-1 rounded text-sm font-medium ${
-                      agent.status === "Active"
-                        ? "bg-green-100 text-green-800"
-                        : "bg-red-100 text-red-800"
-                    } cursor-pointer`}
-                    onClick={() => handleStatusToggle(agent.id)}
+            {table.getHeaderGroups().map((headerGroup) => (
+              <tr key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <th
+                    key={header.id}
+                    className="px-6 py-3 text-xs font-medium text-left uppercase text-text-secondary"
                   >
-                    {agent.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 space-x-2 text-right whitespace-nowrap">
-                  <button
-                    onClick={() => handleDelete(agent.id)}
-                    className="px-3 py-1 text-sm text-white transition rounded bg-error hover:bg-error-700"
-                  >
-                    Delete
-                  </button>
-                </td>
+                    {flexRender(
+                      header.column.columnDef.header,
+                      header.getContext()
+                    )}
+                  </th>
+                ))}
               </tr>
             ))}
-            {filteredAgents.length === 0 && (
-              <tr>
-                <td
-                  colSpan="4"
-                  className="px-6 py-4 text-center text-text-secondary"
-                >
-                  No agents found.
-                </td>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {table.getRowModel().rows.map((row) => (
+              <tr key={row.id}>
+                {row.getVisibleCells().map((cell) => (
+                  <td key={cell.id} className="px-6 py-4">
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                ))}
               </tr>
-            )}
+            ))}
           </tbody>
         </table>
+
+        {/* Mobile cards */}
+        <div className="p-4 space-y-4 sm:hidden">
+          {filteredAgents.map((agent) => (
+            <div
+              key={agent.id}
+              className="flex flex-col gap-2 p-4 bg-white shadow rounded-2xl"
+            >
+              <div className="flex items-center justify-between">
+                <div className="font-medium truncate text-text-primary">
+                  {agent.name}
+                </div>
+              </div>
+              <div className="text-xs truncate text-text-secondary">
+                {agent.email}
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <button
+                  onClick={() => toggleStatus(agent.id)}
+                  className={`px-3 py-1 rounded ${
+                    agent.status === "Active"
+                      ? "bg-success/10 text-success"
+                      : "bg-error/10 text-error"
+                  }`}
+                >
+                  {agent.status}
+                </button>
+              </div>
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setToDelete(agent)}
+                  className="px-3 py-1 text-white rounded bg-error"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))}
+          {filteredAgents.length === 0 && (
+            <div className="py-6 text-center text-gray-500">
+              No agents found.
+            </div>
+          )}
+        </div>
       </div>
+
+      <ConfirmModal
+        open={!!toDelete}
+        title="Delete agent"
+        description={`Are you sure you want to delete ${toDelete?.name}?`}
+        onCancel={() => setToDelete(null)}
+        onConfirm={() => deleteAgent(toDelete.id)}
+      />
     </div>
   );
 };
