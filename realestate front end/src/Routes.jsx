@@ -15,7 +15,6 @@ import ForgotPassword from "pages/auth/FogotPassword";
 import ResetPassword from "pages/auth/ResetPassword";
 import Unauthorized from "pages/unauthorized/Unauthorized";
 import ProtectedRoute from "components/ProtectedRoute";
-import MemberDashboard from "pages/member-dashboard/MemberDashboard";
 import MemberRoutes from "MemberRoutes";
 
 const AdminRoutes = lazy(() => import("AdminRoutes"));

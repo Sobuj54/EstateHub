@@ -4,12 +4,17 @@ import App from "./App";
 import "./styles/tailwind.css";
 import "./styles/index.css";
 import AuthProvider from "contextAPI/AuthContext";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const container = document.getElementById("root");
 const root = createRoot(container);
 
+const queryClient = new QueryClient();
+
 root.render(
-  <AuthProvider>
-    <App />
-  </AuthProvider>
+  <QueryClientProvider client={queryClient}>
+    <AuthProvider>
+      <App />
+    </AuthProvider>
+  </QueryClientProvider>
 );
