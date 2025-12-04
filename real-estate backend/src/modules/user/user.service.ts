@@ -2,8 +2,9 @@ import jwt, { Secret } from 'jsonwebtoken';
 import { refreshTokenType } from '../auth/auth.interface';
 import { User } from './user.model';
 import ApiError from '../../utils/ApiError';
-import { IUser, UploadedFile } from './user.interface';
+import { IUser, UploadedFile, UserDocument } from './user.interface';
 import { uploadOnCloudinary } from '../../utils/uploadOnCloudinary';
+import { deleteFromCloudinary } from '../../helper/deleteFromCloudinary';
 
 const checkStatus = async (
   refreshToken: string
@@ -25,18 +26,21 @@ const checkStatus = async (
 
 const uploadUserAvatar = async (
   file: UploadedFile,
-  id: string
+  user: UserDocument
 ): Promise<IUser> => {
   if (!file?.path) throw new ApiError(400, 'File is Required.');
 
   const res = await uploadOnCloudinary(file.path);
   if (!res) throw new ApiError(400, 'Upload failed.');
 
+  const prevPublicId = user.public_id as string;
+
   const updatedUser = await User.findByIdAndUpdate(
-    id,
+    user._id,
     {
       $set: {
         avatar: res.secure_url,
+        public_id: res.public_id,
       },
     },
     {
@@ -44,7 +48,10 @@ const uploadUserAvatar = async (
     }
   ).select('-refreshToken');
 
+  if (user.public_id) await deleteFromCloudinary(prevPublicId);
+
   if (!updatedUser) throw new ApiError(400, 'Avatar update Failed.');
+
   return updatedUser;
 };
 

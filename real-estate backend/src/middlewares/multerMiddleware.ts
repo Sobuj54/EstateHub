@@ -1,6 +1,5 @@
 import multer from 'multer';
 import path from 'path';
-import ApiError from '../utils/ApiError';
 import fs from 'fs';
 
 // ensure uploads dir exists (run once at module load)
@@ -37,9 +36,8 @@ export const upload = multer({
       cb(null, true);
     } else {
       cb(
-        new ApiError(
-          400,
-          'Only jpeg,jpg,png,avif images under 5 MB are allowed'
+        new Error(
+          `File type ${mimeType} not allowed. Allowed types: jpeg,jpg,png,avif .`
         )
       );
     }

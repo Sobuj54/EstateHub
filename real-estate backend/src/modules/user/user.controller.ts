@@ -13,10 +13,7 @@ const userStatus = asyncHandler(async (req, res) => {
 const uploadAvatar = asyncHandler(async (req, res) => {
   const file = req?.file;
   if (!file) throw new ApiError(400, 'Image file is required.');
-  const result = await uploadUserAvatar(
-    file,
-    (req.user as UserDocument)._id as string
-  );
+  const result = await uploadUserAvatar(file, req.user as UserDocument);
   res
     .status(200)
     .json(new ApiResponse(200, result, 'Avatar uploaded Successfully.'));

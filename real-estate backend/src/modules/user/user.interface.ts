@@ -8,6 +8,7 @@ export interface IUser {
   phone?: string;
   role?: 'agent' | 'admin' | 'super_admin' | 'member';
   avatar?: string;
+  public_id?: string;
   bio?: string;
   isVerified?: boolean;
   refreshToken?: string;
