@@ -26,18 +26,23 @@ export const upload = multer({
     fileSize: 5 * 1024 * 1024, // 5MB
   },
   fileFilter: (req, file, cb) => {
-    const filetypes = /jpeg|jpg|png|avif/;
-    const extensionName = filetypes.test(
+    const allowedExtensions = /jpeg|jpg|png|avif/;
+    const extensionName = allowedExtensions.test(
       path.extname(file.originalname).toLocaleLowerCase()
     );
-    const mimeType = filetypes.test(file.mimetype);
 
-    if (extensionName && mimeType) {
+    // 2. Regex for MIME Types (Recommended for stricter checking)
+    const allowedMimeTypes = /image\/(jpeg|jpg|png|avif)/;
+    const mimeTypeIsValid = allowedMimeTypes.test(file.mimetype);
+
+    if (extensionName && mimeTypeIsValid) {
       cb(null, true);
     } else {
+      const fileIdentification = file.mimetype || file.originalname;
+
       cb(
         new Error(
-          `File type ${mimeType} not allowed. Allowed types: jpeg,jpg,png,avif .`
+          `File type/MIME ${fileIdentification} not allowed. Allowed types: JPEG, PNG, and AVIF.`
         )
       );
     }
