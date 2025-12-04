@@ -1,6 +1,8 @@
+import ApiError from '../../utils/ApiError';
 import ApiResponse from '../../utils/ApiResponse';
 import { asyncHandler } from '../../utils/asyncHandler';
-import { checkStatus } from './user.service';
+import { UserDocument } from './user.interface';
+import { checkStatus, uploadUserAvatar } from './user.service';
 
 const userStatus = asyncHandler(async (req, res) => {
   const { refreshToken } = req.cookies;
@@ -8,4 +10,16 @@ const userStatus = asyncHandler(async (req, res) => {
   res.status(200).json(new ApiResponse(200, result, 'User status Ok.'));
 });
 
-export { userStatus };
+const uploadAvatar = asyncHandler(async (req, res) => {
+  const file = req?.file;
+  if (!file) throw new ApiError(400, 'Image file is required.');
+  const result = await uploadUserAvatar(
+    file,
+    (req.user as UserDocument)._id as string
+  );
+  res
+    .status(200)
+    .json(new ApiResponse(200, result, 'Avatar uploaded Successfully.'));
+});
+
+export { userStatus, uploadAvatar };

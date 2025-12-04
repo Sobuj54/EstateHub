@@ -5,11 +5,15 @@ import { logError } from '../shared/logger';
 import { IGenericError } from '../interfaces/error';
 import {
   handleCastError,
+  handleJWTError,
+  handleMulterError,
   mongooseValidationError,
   zodValidationError,
 } from '../utils/validationErrorHandler';
 import ApiResponse from '../utils/ApiResponse';
 import { ZodError } from 'zod';
+import { MulterError } from 'multer';
+import { JsonWebTokenError, TokenExpiredError } from 'jsonwebtoken';
 
 const globalErrorHandler: ErrorRequestHandler = (err, req, res, next) => {
   let error: IGenericError;
@@ -28,6 +32,13 @@ const globalErrorHandler: ErrorRequestHandler = (err, req, res, next) => {
     error = zodValidationError(err);
   } else if (err.name === 'CastError') {
     error = handleCastError(err);
+  } else if (err instanceof MulterError) {
+    error = handleMulterError(err);
+  } else if (
+    err instanceof TokenExpiredError ||
+    err instanceof JsonWebTokenError
+  ) {
+    error = handleJWTError(err);
   } else {
     error = {
       message: err.message || 'Something went wrong',

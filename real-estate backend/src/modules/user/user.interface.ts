@@ -23,3 +23,14 @@ export type UserDocument = IUser & IUserMethods & Document;
 
 // for statics
 export interface UserModel extends Model<UserDocument> {}
+
+export type UploadedFile = {
+  fieldname: string; // form field name
+  originalname: string; // original file name
+  encoding: string; // file encoding
+  mimetype: string; // MIME type (e.g., image/jpeg)
+  destination: string; // folder where file is stored
+  filename: string; // filename on disk
+  path: string; // full path on server
+  size: number; // file size in bytes
+};
