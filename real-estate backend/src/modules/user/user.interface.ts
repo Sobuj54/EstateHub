@@ -1,12 +1,13 @@
 /* eslint-disable no-unused-vars */
 import { Document, Model } from 'mongoose';
+import { IProperty } from '../property/property.interface';
 
 export interface IUser {
   name: string;
   email: string;
   password: string;
   phone?: string;
-  role?: 'agent' | 'admin' | 'super_admin' | 'member';
+  role: 'agent' | 'admin' | 'super_admin' | 'member';
   avatar?: string;
   public_id?: string;
   bio?: string;
@@ -35,3 +36,21 @@ export type UploadedFile = {
   path: string; // full path on server
   size: number; // file size in bytes
 };
+
+export interface ITopAgent {
+  _id: string;
+  name: string;
+  avatar?: string;
+  propertiesCount: number;
+}
+
+export interface DashboardSummary {
+  totalActiveAgents: number;
+  totalMembers: number;
+  totalProperties: number;
+  newMembersCount: number;
+
+  recentProperties: IProperty[];
+
+  topAgents: ITopAgent[];
+}

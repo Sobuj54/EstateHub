@@ -1,9 +1,9 @@
-// src/pages/admin/AdminDashboard.jsx
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import Icon from "components/AppIcon";
-import useAxiosSecure from "hooks/useAxiosSecure";
+import useAdminDashboardData from "hooks/useDashboardSummary";
+import { formatDate } from "utils/formatDate";
 
-// MOCK data remains the same...
+// MOCK data (Used for structure reference and CSV export)
 const MOCK = {
   stats: {
     totalAgents: 12,
@@ -12,102 +12,51 @@ const MOCK = {
     propertiesThisMonth: 8,
     newMembers: 5,
   },
-  recentProperties: [
-    { id: 1, title: "Luxury Villa", agent: "John Smith", date: "2025-11-25" },
-    { id: 2, title: "Modern Apartment", agent: "Jane Doe", date: "2025-11-24" },
-    {
-      id: 3,
-      title: "Countryside House",
-      agent: "Alan Poe",
-      date: "2025-11-20",
-    },
-  ],
-  topAgents: [
-    { id: 1, name: "John Smith", properties: 20 },
-    { id: 2, name: "Jane Doe", properties: 15 },
-    { id: 3, name: "Alice Grey", properties: 12 },
-  ],
 };
 
 const AdminDashboard = () => {
-  const api = useAxiosSecure();
-  const [stats, setStats] = useState(null);
-  const [recentProperties, setRecentProperties] = useState([]);
-  const [topAgents, setTopAgents] = useState([]);
   const [mockMode, setMockMode] = useState(false);
-  const [loading, setLoading] = useState(true);
 
-  // ... useEffect logic remains the same ...
+  // 🔑 Use the custom hook to get data and state
+  const {
+    data: apiData,
+    isLoading,
+    isFetching,
+    isError,
+    error,
+  } = useAdminDashboardData(mockMode);
 
-  useEffect(() => {
-    let mounted = true;
+  // --- Data Mapping and Consolidation ---
 
-    (async () => {
-      setLoading(true);
-      // if mockMode enabled, skip API and use mock immediately
-      if (mockMode) {
-        if (!mounted) return;
-        setStats(MOCK.stats);
-        setRecentProperties(MOCK.recentProperties);
-        setTopAgents(MOCK.topAgents);
-        setLoading(false);
-        return;
-      }
+  // Use a fallback object for destructuring safety if data is null/undefined
+  const dashboardData = apiData || {};
 
-      try {
-        const res = await api.get("/admin/stats");
-        // backend might return data shaped differently; prefer res.data.data or res.data
-        const d = res?.data?.data || res?.data || null;
+  // Consolidate and map stats for rendering
+  const stats = {
+    totalAgents: dashboardData.totalActiveAgents ?? MOCK.stats.totalAgents,
+    totalMembers: dashboardData.totalMembers ?? MOCK.stats.totalMembers,
+    totalProperties:
+      dashboardData.totalProperties ?? MOCK.stats.totalProperties,
+    newMembers: dashboardData.newMembersCount ?? MOCK.stats.newMembers,
+    // Calculate propertiesThisMonth count based on the array length
+    propertiesThisMonth:
+      dashboardData.recentProperties?.length ?? MOCK.stats.propertiesThisMonth,
+  };
 
-        if (!mounted) return;
+  // Assign list data with safe fallbacks
+  const recentProperties = dashboardData.recentProperties || [];
+  const topAgents = dashboardData.topAgents || [];
 
-        if (d) {
-          // if backend provides full payload, use it; else fall back to partial/mock
-          setStats({
-            totalAgents: d.totalAgents ?? d.agents ?? MOCK.stats.totalAgents,
-            totalMembers:
-              d.totalMembers ?? d.members ?? MOCK.stats.totalMembers,
-            totalProperties:
-              d.totalProperties ?? d.properties ?? MOCK.stats.totalProperties,
-            propertiesThisMonth:
-              d.propertiesThisMonth ?? MOCK.stats.propertiesThisMonth,
-            newMembers: d.newMembers ?? MOCK.stats.newMembers,
-          });
-          setRecentProperties(d.recentProperties ?? MOCK.recentProperties);
-          setTopAgents(d.topAgents ?? MOCK.topAgents);
-        } else {
-          // no data returned — use mock
-          setStats(MOCK.stats);
-          setRecentProperties(MOCK.recentProperties);
-          setTopAgents(MOCK.topAgents);
-        }
-      } catch (err) {
-        // network / CORS / backend down — fall back to mock data
-        console.warn(
-          "AdminDashboard: failed to fetch stats, using mock data.",
-          err
-        );
-        if (!mounted) return;
-        setStats(MOCK.stats);
-        setRecentProperties(MOCK.recentProperties);
-        setTopAgents(MOCK.topAgents);
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    })();
+  // Determine if we should show the loading skeleton
+  // We show a skeleton if we are loading AND we don't have any data yet, AND we are not in mock mode.
+  const showSkeleton = isLoading && !apiData && !mockMode;
 
-    return () => {
-      mounted = false;
-    };
-  }, [api, mockMode]);
+  // --- Render Logic ---
 
-  // show skeleton while first loading
-  if (loading && !mockMode && !stats) {
+  if (showSkeleton) {
     return (
       <div>
-        {/* Adjusted w-1/4 to w-1/2 for smaller screens */}
         <div className="w-1/2 h-8 mb-6 rounded bg-secondary-100 animate-pulse sm:w-1/4" />
-        {/* Adjusted to grid-cols-2 for smaller screens */}
         <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
           {[...Array(4)].map((_, i) => (
             <div
@@ -120,16 +69,23 @@ const AdminDashboard = () => {
     );
   }
 
+  // If there's an error and we aren't in mock mode, log it for debugging
+  if (isError && !mockMode) {
+    console.error("Dashboard data fetch failed:", error);
+  }
+
   return (
     <div className="space-y-8">
-      {/* dev banner + mock toggle */}
+      {/* Dev Banner + Mock Toggle */}
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-        {" "}
-        {/* Adjusted to stack on mobile */}
         <h1 className="text-2xl font-bold sm:text-3xl text-text-primary">
-          {" "}
-          {/* Adjusted font size */}
           Admin Dashboard
+          {/* Visual indicator for background fetching */}
+          {isFetching && (
+            <span className="ml-3 text-sm font-light text-primary-500 animate-pulse">
+              Refreshing...
+            </span>
+          )}
         </h1>
         <div className="flex items-center gap-3">
           <label className="inline-flex items-center space-x-2 text-sm text-text-secondary">
@@ -142,9 +98,9 @@ const AdminDashboard = () => {
             <span>Use mock data</span>
           </label>
 
+          {/* Export CSV Button (uses final 'stats' data) */}
           <button
             onClick={() => {
-              // export current visible stats as CSV (very small helper)
               const csv = [
                 ["metric", "value"],
                 ["totalAgents", stats.totalAgents],
@@ -173,32 +129,22 @@ const AdminDashboard = () => {
         </div>
       </div>
 
-      {/* mock mode indicator */}
-      {mockMode && (
+      {/* mock mode / error indicator */}
+      {(mockMode || isError) && (
         <div className="flex items-center p-3 text-sm text-yellow-800 border border-yellow-100 rounded-md bg-yellow-50">
-          {" "}
-          {/* Adjusted padding */}
           <Icon name="Info" size={16} className="mr-2" />
           <div>
-            <strong>Mock mode</strong> — data shown is mock. Toggle off to
-            attempt fetching from API.
+            <strong>{mockMode ? "Mock mode" : "Error fallback"}</strong> — Data
+            shown is {mockMode ? "mock" : "from a fallback due to fetch error."}
           </div>
         </div>
       )}
 
-      {/* stat cards */}
-      {/* Changed sm:grid-cols-2 lg:grid-cols-4 to mobile-first grid-cols-2 md:grid-cols-4 */}
+      {/* stat cards (dynamic) */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:gap-6">
         <div className="p-4 bg-white shadow sm:p-6 rounded-2xl">
-          {" "}
-          {/* Reduced padding for small screens */}
-          <h3 className="text-sm font-medium text-text-secondary">
-            Agents
-          </h3>{" "}
-          {/* Adjusted font size */}
+          <h3 className="text-sm font-medium text-text-secondary">Agents</h3>
           <p className="mt-2 text-xl font-bold sm:text-2xl text-text-primary">
-            {" "}
-            {/* Adjusted font size */}
             {stats.totalAgents}
           </p>
           <p className="mt-1 text-xs text-text-secondary">Active agents</p>
@@ -238,28 +184,27 @@ const AdminDashboard = () => {
       </div>
 
       {/* main content */}
-      {/* Changed lg:grid-cols-3 to mobile-first grid-cols-1 md:grid-cols-3 */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-        {/* Recent Properties (takes full width on mobile, 2/3 on desktop) */}
+        {/* Recent Properties */}
         <div className="p-4 bg-white shadow sm:p-6 md:col-span-2 rounded-2xl">
-          {" "}
-          {/* Adjusted padding */}
           <h2 className="mb-4 text-base font-semibold sm:text-lg text-text-primary">
             Recent Properties
           </h2>
           <ul className="divide-y divide-gray-100">
             {recentProperties.map((p) => (
-              <li key={p.id} className="flex items-center justify-between py-3">
+              <li
+                key={p._id}
+                className="flex items-center justify-between py-3"
+              >
                 <div>
                   <div className="font-medium text-text-primary">{p.title}</div>
                   <div className="text-xs text-text-secondary">
-                    {p.agent} · {p.date}
+                    **{p.agent?.name || "N/A Agent"}** ·{" "}
+                    {formatDate(p.createdAt)}
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
                   <button className="px-3 py-1 text-xs text-white rounded bg-primary">
-                    {" "}
-                    {/* Adjusted font size */}
                     View
                   </button>
                 </div>
@@ -268,26 +213,25 @@ const AdminDashboard = () => {
           </ul>
         </div>
 
-        {/* Top Agents (takes full width on mobile, 1/3 on desktop) */}
+        {/* Top Agents */}
         <div className="p-4 bg-white shadow sm:p-6 rounded-2xl">
-          {" "}
-          {/* Adjusted padding */}
           <h2 className="mb-4 text-base font-semibold sm:text-lg text-text-primary">
             Top Agents
           </h2>
           <ul className="divide-y divide-gray-100">
             {topAgents.map((a) => (
-              <li key={a.id} className="flex items-center justify-between py-3">
+              <li
+                key={a._id}
+                className="flex items-center justify-between py-3"
+              >
                 <div>
                   <div className="font-medium text-text-primary">{a.name}</div>
                   <div className="text-xs text-text-secondary">
-                    {a.properties} listings
+                    {a.propertiesCount} listings
                   </div>
                 </div>
                 <div>
                   <button className="px-3 py-1 text-xs border rounded">
-                    {" "}
-                    {/* Adjusted font size */}
                     Profile
                   </button>
                 </div>
