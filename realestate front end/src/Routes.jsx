@@ -35,7 +35,7 @@ const Routes = () => {
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password/:token" element={<ResetPassword />} />
             <Route path="/property-listings" element={<PropertyListings />} />
-            <Route path="/property-details" element={<PropertyDetails />} />
+            <Route path="/property-details/:id" element={<PropertyDetails />} />
             <Route
               path="/agent-dashboard/*"
               element={

@@ -1,6 +1,7 @@
 // src/pages/property-details/index.jsx
 import React, { useState, useEffect } from "react";
-import { useSearchParams, Link } from "react-router-dom";
+// Change: Import useParams instead of useSearchParams
+import { useParams, Link } from "react-router-dom";
 import Header from "../../components/ui/Header";
 import Icon from "../../components/AppIcon";
 import Image from "../../components/AppImage";
@@ -14,9 +15,13 @@ import ContactForm from "./components/ContactForm";
 import SimilarProperties from "./components/SimilarProperties";
 import LoadingState from "./components/LoadingState";
 import { Helmet } from "react-helmet";
+import axios from "axios";
 
 const PropertyDetails = () => {
-  const [searchParams] = useSearchParams();
+  // 🔑 CHANGE 1: Use useParams to get the ID
+  const { id: propertyId } = useParams();
+
+  // Initial state logic remains as in your original file
   const [property, setProperty] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isSaved, setIsSaved] = useState(false);
@@ -24,102 +29,7 @@ const PropertyDetails = () => {
   const [showMortgageCalculator, setShowMortgageCalculator] = useState(false);
   const [showContactForm, setShowContactForm] = useState(false);
 
-  const propertyId = searchParams.get("id");
-
-  // Mock property data - in real app this would come from API
-  const mockProperty = {
-    id: 1,
-    title: "Modern Downtown Apartment",
-    price: 450000,
-    address: "123 Main Street, Downtown, NY 10001",
-    bedrooms: 2,
-    bathrooms: 2,
-    sqft: 1200,
-    propertyType: "apartment",
-    yearBuilt: 2019,
-    lotSize: null,
-    parkingSpaces: 1,
-    images: [
-      "https://images.pexels.com/photos/1643383/pexels-photo-1643383.jpeg?auto=compress&cs=tinysrgb&w=800",
-      "https://images.pixabay.com/photo/2017/03/28/12/13/chairs-2181968_1280.jpg?auto=compress&cs=tinysrgb&w=800",
-      "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&h=600&fit=crop",
-      "https://images.pexels.com/photos/2121121/pexels-photo-2121121.jpeg?auto=compress&cs=tinysrgb&w=800",
-      "https://images.pixabay.com/photo/2016/12/30/07/59/kitchen-1940174_1280.jpg?auto=compress&cs=tinysrgb&w=800",
-      "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&h=600&fit=crop",
-    ],
-    agent: {
-      name: "Sarah Johnson",
-      phone: "(555) 123-4567",
-      email: "sarah.johnson@estatehub.com",
-      avatar: "https://randomuser.me/api/portraits/women/32.jpg",
-      rating: 4.8,
-      reviewsCount: 127,
-      bio: "Sarah is a dedicated real estate professional with over 10 years of experience in the downtown market. She specializes in luxury apartments and condominiums.",
-    },
-    coordinates: { lat: 40.7128, lng: -74.006 },
-    daysOnMarket: 15,
-    mls: "MLS-2024-001234",
-    description: `Beautiful modern apartment in the heart of downtown with stunning city views and premium amenities. This spacious 2-bedroom, 2-bathroom unit features floor-to-ceiling windows, hardwood floors, and a gourmet kitchen with stainless steel appliances.
-
-The open floor plan creates a seamless flow between the living, dining, and kitchen areas, perfect for entertaining. The master bedroom includes a walk-in closet and ensuite bathroom with marble finishes.
-
-Building amenities include a fitness center, rooftop pool, 24-hour concierge service, and valet parking. Located within walking distance of restaurants, shopping, and public transportation with easy access to major highways.`,
-    amenities: [
-      "24-Hour Concierge",
-      "Fitness Center",
-      "Rooftop Pool",
-      "Valet Parking",
-      "Pet Friendly",
-      "In-Unit Laundry",
-      "Balcony",
-      "Central Air",
-      "Hardwood Floors",
-      "Stainless Steel Appliances",
-    ],
-    schools: [
-      {
-        name: "Downtown Elementary School",
-        type: "Elementary",
-        rating: 8,
-        distance: "0.3 miles",
-      },
-      {
-        name: "Central Middle School",
-        type: "Middle School",
-        rating: 7,
-        distance: "0.5 miles",
-      },
-      {
-        name: "Metropolitan High School",
-        type: "High School",
-        rating: 9,
-        distance: "0.7 miles",
-      },
-    ],
-    neighborhood: {
-      walkScore: 92,
-      transitScore: 85,
-      bikeScore: 78,
-      nearbyPlaces: [
-        { name: "Central Park", type: "Park", distance: "0.2 miles" },
-        {
-          name: "Downtown Shopping Center",
-          type: "Shopping",
-          distance: "0.1 miles",
-        },
-        { name: "Metro Station", type: "Transit", distance: "0.3 miles" },
-        { name: "Whole Foods Market", type: "Grocery", distance: "0.4 miles" },
-      ],
-    },
-    propertyHistory: [
-      { date: "2024-01-15", event: "Listed for Sale", price: 450000 },
-      { date: "2023-12-01", event: "Price Reduction", price: 465000 },
-      { date: "2023-10-20", event: "Listed for Sale", price: 475000 },
-    ],
-    virtualTour: "https://example.com/virtual-tour",
-    video: "https://example.com/property-video",
-  };
-
+  // Mock data for similar properties (remains static)
   const similarProperties = [
     {
       id: 2,
@@ -159,21 +69,66 @@ Building amenities include a fitness center, rooftop pool, 24-hour concierge ser
     },
   ];
 
+  const url = import.meta.env.VITE_API;
+
+  // 🔑 CHANGE 2: Replace mock data with API fetch logic in useEffect
   useEffect(() => {
     const fetchProperty = async () => {
-      setLoading(true);
-      // Simulate API call
-      setTimeout(() => {
-        setProperty(mockProperty);
-        setIsSaved(false);
+      if (!propertyId) {
         setLoading(false);
-      }, 1000);
+        setProperty(null); // Or handle invalid ID route
+        return;
+      }
+
+      setLoading(true);
+      try {
+        // API endpoint is {{server}}/properties/:id
+        const response = await axios.get(`${url}/properties/${propertyId}`);
+        const fetchedData = response.data.data;
+
+        // Map fetched data to expected structure,
+        // filling in missing fields with sensible defaults
+        // to prevent UI errors in components like PropertyOverview/AgentCard
+        const propertyWithDefaults = {
+          ...fetchedData,
+          // Use a more friendly property key for the ID
+          id: fetchedData._id,
+          // Set sensible defaults for fields missing in the API response
+          yearBuilt: fetchedData.yearBuilt || "N/A",
+          lotSize: fetchedData.lotSize || "N/A",
+          parkingSpaces: fetchedData.parkingSpaces || 0,
+          daysOnMarket: fetchedData.daysOnMarket || 1,
+          mls: fetchedData.mls || "N/A",
+          virtualTour: fetchedData.virtualTour || null,
+          video: fetchedData.video || null,
+          propertyHistory: fetchedData.propertyHistory || [],
+          neighborhood: fetchedData.neighborhood || {},
+          schools: fetchedData.schools || [],
+
+          // Agent fields that were in your mock but are missing in the provided API response
+          agent: {
+            ...fetchedData.agent,
+            phone: fetchedData.agent.phone || "(555) 555-5555",
+            rating: fetchedData.agent.rating || 4.5,
+            reviewsCount: fetchedData.agent.reviewsCount || 50,
+            bio:
+              fetchedData.agent.bio ||
+              `${fetchedData.agent.name} is a dedicated real estate professional committed to serving your needs.`,
+          },
+        };
+
+        setProperty(propertyWithDefaults);
+        setIsSaved(false);
+      } catch (error) {
+        console.error("Failed to fetch property details:", error);
+        setProperty(null); // Set property to null on fetch failure
+      } finally {
+        setLoading(false);
+      }
     };
 
-    if (propertyId) {
-      fetchProperty();
-    }
-  }, [propertyId]);
+    fetchProperty();
+  }, [propertyId]); // Refetch when propertyId changes
 
   const handleSave = () => {
     setIsSaved(!isSaved);
@@ -215,7 +170,7 @@ Building amenities include a fitness center, rooftop pool, 24-hour concierge ser
     return (
       <div className="min-h-screen bg-background">
         <Header />
-        <main className="pt-16 lg:pt-18">
+        <main className="pt-18 lg:pt-18">
           <div className="px-4 py-12 mx-auto max-w-7xl sm:px-6 lg:px-8">
             <div className="text-center">
               <Icon
@@ -247,12 +202,13 @@ Building amenities include a fitness center, rooftop pool, 24-hour concierge ser
   return (
     <>
       <Helmet>
-        <title>EstateHub | Details</title>
+        {/* Dynamically set the title */}
+        <title>EstateHub | {property.title}</title>
       </Helmet>
       <div className="min-h-screen bg-background">
         <Header />
 
-        <main className="pt-16 lg:pt-18">
+        <main className="pt-32 lg:pt-18">
           {/* Breadcrumb */}
           <div className="border-b bg-surface border-border">
             <div className="px-4 py-3 mx-auto max-w-7xl sm:px-6 lg:px-8">
@@ -442,6 +398,7 @@ Building amenities include a fitness center, rooftop pool, 24-hour concierge ser
                     </button>
 
                     <div className="grid grid-cols-2 gap-2">
+                      {/* Original button structure maintained */}
                       <button className="flex items-center justify-center py-2 space-x-2 transition-all duration-200 rounded-md bg-accent-100 text-accent-600 hover:bg-accent hover:text-white">
                         <Icon name="Phone" size={16} />
                         <span className="text-sm">Call</span>
