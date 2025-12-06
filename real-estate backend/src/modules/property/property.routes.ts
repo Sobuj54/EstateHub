@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { verifyJWT } from '../auth/auth.middleware';
 import {
   createProperty,
+  deleteAProperty,
   getAllProperties,
   getAProperty,
 } from './property.controller';
@@ -23,5 +24,12 @@ router
 
 router.route('/').get(getAllProperties);
 router.route('/:id').get(getAProperty);
+router
+  .route('/:id')
+  .delete(
+    verifyJWT,
+    verifyAuthorization([USER_ROLE.ADMIN, USER_ROLE.SUPER_ADMIN]),
+    deleteAProperty
+  );
 
 export const propertyRoutes = router;

@@ -1,7 +1,12 @@
 import ApiResponse from '../../utils/ApiResponse';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { UserDocument } from '../user/user.interface';
-import { addProperty, getProperties, getProperty } from './property.service';
+import {
+  addProperty,
+  deleteProperty,
+  getProperties,
+  getProperty,
+} from './property.service';
 
 const createProperty = asyncHandler(async (req, res) => {
   const { ...property } = req.body;
@@ -15,8 +20,8 @@ const createProperty = asyncHandler(async (req, res) => {
 });
 
 const getAllProperties = asyncHandler(async (req, res) => {
-  const { limit } = req.query;
-  const properties = await getProperties(Number(limit));
+  const { limit = 10, pageNo = 1 } = req.query;
+  const properties = await getProperties(Number(limit), Number(pageNo));
   res
     .status(200)
     .json(
@@ -32,4 +37,12 @@ const getAProperty = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, property, 'Fetched property successfully.'));
 });
 
-export { createProperty, getAllProperties, getAProperty };
+const deleteAProperty = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  await deleteProperty(id);
+  res
+    .status(200)
+    .json(new ApiResponse(200, null, 'Deleted property successfully.'));
+});
+
+export { createProperty, getAllProperties, getAProperty, deleteAProperty };

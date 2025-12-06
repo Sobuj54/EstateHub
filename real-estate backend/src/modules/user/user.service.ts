@@ -8,6 +8,7 @@ import {
   IUser,
   UploadedFile,
   UserDocument,
+  UserReturnType,
 } from './user.interface';
 import { uploadOnCloudinary } from '../../utils/uploadOnCloudinary';
 import { deleteFromCloudinary } from '../../helper/deleteFromCloudinary';
@@ -15,6 +16,7 @@ import { USER_ROLE } from '../../enums/user';
 import { Property } from '../property/property.model';
 import { currentMonth } from '../../helper/currentMonth';
 import { IPropertyDocument } from '../property/property.interface';
+import mongoose from 'mongoose';
 
 const checkStatus = async (
   refreshToken: string
@@ -151,4 +153,136 @@ const dashboardSummary = async (): Promise<DashboardSummary> => {
   }
 };
 
-export { checkStatus, uploadUserAvatar, dashboardSummary };
+const getAgents = async (
+  limit: number,
+  pageNo: number
+): Promise<UserReturnType<IUser>> => {
+  if (limit < 0) limit = 0;
+  const skip = (pageNo - 1) * limit;
+  const agents = await User.find({ role: USER_ROLE.AGENT })
+    .limit(limit)
+    .skip(skip)
+    .select('-refreshToken')
+    .lean();
+
+  if (!agents.length) throw new ApiError(404, 'NO agent found.');
+  const totalAgents = await User.countDocuments({
+    role: USER_ROLE.AGENT,
+  });
+
+  const totalPages = Math.ceil(totalAgents / limit);
+  return { users: agents, totalPages, currentPage: pageNo };
+};
+
+const verifiedAgents = async (
+  limit: number,
+  pageNo: number
+): Promise<UserReturnType<IUser>> => {
+  if (limit < 0) limit = 0;
+  const skip = (pageNo - 1) * limit;
+  const agents = await User.find({ role: USER_ROLE.AGENT, isVerified: true })
+    .limit(limit)
+    .skip(skip)
+    .select('-refreshToken -isVerified')
+    .lean();
+
+  if (!agents.length) throw new ApiError(404, 'NO agent found.');
+
+  const totalAgents = await User.countDocuments({
+    role: USER_ROLE.AGENT,
+    isVerified: true,
+  });
+
+  const totalPages = Math.ceil(totalAgents / limit);
+  return { users: agents, totalPages, currentPage: pageNo };
+};
+
+const getMembers = async (
+  limit: number,
+  pageNo: number
+): Promise<UserReturnType<IUser>> => {
+  if (limit < 0) limit = 0;
+  const skip = (pageNo - 1) * limit;
+  const members = await User.find({ role: USER_ROLE.MEMBER })
+    .limit(limit)
+    .skip(skip)
+    .select('-refreshToken')
+    .lean();
+
+  if (!members.length) throw new ApiError(404, 'NO agent found.');
+
+  const totalMembers = await User.countDocuments({
+    role: USER_ROLE.MEMBER,
+  });
+
+  const totalPages = Math.ceil(totalMembers / limit);
+  return { users: members, totalPages, currentPage: pageNo };
+};
+
+const updateRole = async (id: string, role: string): Promise<IUser> => {
+  const existingUser = await User.findByIdAndUpdate(
+    id,
+    {
+      $set: {
+        role: role,
+      },
+    },
+    { new: true }
+  )
+    .select('-refreshToken')
+    .lean();
+  if (!existingUser) throw new ApiError(404, 'No user exists.');
+
+  return existingUser;
+};
+
+const verifyAUser = async (id: string, isVerified: boolean) => {
+  const existingUser = await User.findByIdAndUpdate(
+    id,
+    {
+      $set: {
+        isVerified: isVerified,
+      },
+    },
+    { new: true }
+  )
+    .select('-refreshToken')
+    .lean();
+  if (!existingUser) throw new ApiError(404, 'No user exists.');
+
+  return existingUser;
+};
+
+const deleteUser = async (id: string) => {
+  const existingUser = await User.findById(id);
+  if (!existingUser) throw new ApiError(404, 'No user exists.');
+
+  const session = await mongoose.startSession();
+  try {
+    session.startTransaction();
+    await Property.deleteMany({ agent: id }, { session });
+
+    const user = await User.findByIdAndDelete(id, { session });
+    if (!user) throw new ApiError(500, 'User deletion failed.');
+
+    await session.commitTransaction();
+    await session.endSession();
+    // eslint-disable-next-line no-unused-vars
+  } catch (error) {
+    await session.abortTransaction();
+    await session.endSession();
+    throw new ApiError(500, 'Failed to delete user and properties.');
+  }
+};
+
+export {
+  checkStatus,
+  uploadUserAvatar,
+  dashboardSummary,
+  getAgents,
+  verifiedAgents,
+  getMembers,
+  updateRole,
+  verifyAUser,
+  deleteUser,
+};

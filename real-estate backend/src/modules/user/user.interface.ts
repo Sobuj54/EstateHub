@@ -54,3 +54,9 @@ export interface DashboardSummary {
 
   topAgents: ITopAgent[];
 }
+
+export type UserReturnType<T> = {
+  users: T[];
+  totalPages: number;
+  currentPage: number;
+};

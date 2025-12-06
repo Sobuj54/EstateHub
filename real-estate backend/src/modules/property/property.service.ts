@@ -12,10 +12,20 @@ const addProperty = async (
   return res;
 };
 
-const getProperties = async (limit: number): Promise<IProperty[]> => {
+const getProperties = async (
+  limit: number,
+  pageNo: number
+): Promise<{
+  properties: IProperty[];
+  currentPage: number;
+  totalPage: number;
+}> => {
+  const skip = (pageNo - 1) * limit;
+
   const properties = await Property.find({})
-    .sort({ createdAt: -1 })
     .limit(limit)
+    .skip(skip)
+    .sort({ createdAt: -1 })
     .populate({
       path: 'agent',
       select: {
@@ -27,7 +37,12 @@ const getProperties = async (limit: number): Promise<IProperty[]> => {
     })
     .lean();
   if (!properties.length) throw new ApiError(404, 'NO properties found.');
-  return properties;
+
+  const totalProperties = await Property.countDocuments();
+
+  const totalPage = Math.ceil(totalProperties / limit);
+
+  return { properties, currentPage: pageNo, totalPage };
 };
 
 const getProperty = async (id: string): Promise<IProperty> => {
@@ -46,4 +61,9 @@ const getProperty = async (id: string): Promise<IProperty> => {
   return property;
 };
 
-export { addProperty, getProperties, getProperty };
+const deleteProperty = async (id: string) => {
+  const property = await Property.findByIdAndDelete(id);
+  if (!property) throw new ApiError(404, 'property deletion failed.');
+};
+
+export { addProperty, getProperties, getProperty, deleteProperty };

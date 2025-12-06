@@ -41,6 +41,7 @@ const userSchema = new mongoose.Schema<IUser, UserModel, IUserMethods>(
     },
     public_id: {
       type: String,
+      select: 0,
     },
     bio: {
       type: String,
