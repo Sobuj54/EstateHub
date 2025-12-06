@@ -55,7 +55,7 @@ const useAdminDashboardData = (mockMode) => {
     },
 
     // Configuration
-    staleTime: 60 * 1000, // Data is considered fresh for 1 minute
+    staleTime: 5 * 60 * 1000, // Data is considered fresh for 5 minute
     refetchOnWindowFocus: true,
 
     // Initial data setup for seamless loading (especially useful for pre-rendered state)

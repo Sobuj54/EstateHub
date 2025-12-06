@@ -1,7 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
+// src/pages/admin-dashboard/components/ManageMembers.jsx
+import React, { useMemo, useState } from "react";
 import { toast } from "react-toastify";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import useAxiosSecure from "hooks/useAxiosSecure";
 import ConfirmModal from "components/ui/ConfirmModal";
+import Pagination from "components/ui/Pagination";
 
 const roles = [
   { value: "member", label: "Member" },
@@ -10,128 +13,163 @@ const roles = [
   { value: "super_admin", label: "Super Admin" },
 ];
 
-const MOCK_MEMBERS = [
-  {
-    id: 1,
-    name: "Alice Johnson",
-    email: "alice@example.com",
-    role: "member",
+const transformMemberData = (apiData) =>
+  apiData.map((m) => ({
+    id: m._id,
+    name: m.name,
+    email: m.email,
+    role: m.role,
     status: "active",
-  },
-  {
-    id: 2,
-    name: "Bob Williams",
-    email: "bob@example.com",
-    role: "agent",
-    status: "active",
-  },
-  {
-    id: 3,
-    name: "Charlie Brown",
-    email: "charlie@example.com",
-    role: "member",
-    status: "inactive",
-  },
-];
+    isVerified: !!m.isVerified,
+    avatar: m.avatar,
+    createdAt: m.createdAt,
+  }));
 
 const ManageMembers = () => {
   const api = useAxiosSecure();
-  const [members, setMembers] = useState([]);
-  const [query, setQuery] = useState("");
+  const queryClient = useQueryClient();
+
+  // Pagination & search
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [q, setQ] = useState("");
+
+  // UI state
   const [selectedDelete, setSelectedDelete] = useState(null);
-  const [selectedBulk, setSelectedBulk] = useState([]);
-  const [loading, setLoading] = useState(true);
 
-  // Fetch members
-  useEffect(() => {
-    let mounted = true;
-    const fetchMembers = async () => {
-      setLoading(true);
-      try {
-        const res = await api.get("/admin/users?role=member");
-        const data = res?.data?.data || MOCK_MEMBERS;
-        if (!mounted) return;
-        setMembers(data);
-      } catch (err) {
-        console.warn("Failed to fetch members, using mock data.", err);
-        if (!mounted) return;
-        setMembers(MOCK_MEMBERS);
-      } finally {
-        if (!mounted) return;
-        setLoading(false);
+  // ------- Fetch members with pagination & search -------
+  const { data, isLoading, isError, isFetching } = useQuery({
+    queryKey: ["members", page, limit, q],
+    queryFn: async () => {
+      const res = await api.get("/users/members", {
+        params: { page, limit, q },
+      });
+      const users = res?.data?.data?.users ?? [];
+      const totalPages = res?.data?.data?.totalPages ?? 1;
+      const currentPage = res?.data?.data?.currentPage ?? page;
+      return {
+        members: transformMemberData(users),
+        totalPages,
+        currentPage,
+      };
+    },
+    keepPreviousData: true,
+    staleTime: 1000 * 30,
+    retry: 1,
+  });
+
+  const members = data?.members ?? [];
+  const totalPages = data?.totalPages ?? 1;
+  const currentPage = data?.currentPage ?? page;
+
+  // Helper: optimistic update
+  const optimisticUpdate = async ({ id, patch }) => {
+    await queryClient.cancelQueries({ queryKey: ["members", page, limit, q] });
+    const previous = queryClient.getQueryData({
+      queryKey: ["members", page, limit, q],
+    });
+    queryClient.setQueryData(
+      { queryKey: ["members", page, limit, q] },
+      (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          members: old.members.map((m) =>
+            m.id === id ? { ...m, ...patch } : m
+          ),
+        };
       }
-    };
-    fetchMembers();
-    return () => (mounted = false);
-  }, [api]);
-
-  // Filter members by query
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return members;
-    return members.filter(
-      (m) =>
-        (m.name || "").toLowerCase().includes(q) ||
-        (m.email || "").toLowerCase().includes(q)
     );
-  }, [members, query]);
+    return { previous };
+  };
 
-  // Role change handler
-  const handleRoleChange = async (id, nextRole) => {
-    const oldRole = members.find((m) => m.id === id)?.role;
-    setMembers((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, role: nextRole } : m))
-    );
-    try {
-      await api.patch(`/admin/users/${id}`, { role: nextRole });
-      toast.success("Role updated");
-    } catch (err) {
-      setMembers((prev) =>
-        prev.map((m) => (m.id === id ? { ...m, role: oldRole } : m))
+  const handleErrorRollback = (context) => {
+    if (context?.previous) {
+      queryClient.setQueryData(
+        { queryKey: ["members", page, limit, q] },
+        context.previous
       );
-      toast.error("Failed to update role");
     }
+    toast.error("Operation failed — rolled back.");
   };
 
-  // Single delete handler
-  const handleDelete = async (id) => {
-    try {
-      await api.delete(`/admin/users/${id}`);
-      setMembers((prev) => prev.filter((m) => m.id !== id));
-      setSelectedDelete(null);
-      toast.success("Member deleted");
-    } catch (err) {
-      toast.error("Delete failed");
-    }
+  // ------- Role mutation -------
+  const roleMutation = useMutation({
+    mutationFn: ({ id, role }) =>
+      api.patch(`/users/change-role/${id}`, { role }),
+    onMutate: (vars) =>
+      optimisticUpdate({ id: vars.id, patch: { role: vars.role } }),
+    onError: (err, vars, context) => handleErrorRollback(context),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["members"] }),
+    onSuccess: () => toast.success("Role updated"),
+  });
+
+  const handleRoleChange = (id, nextRole) => {
+    roleMutation.mutate({ id, role: nextRole });
   };
 
-  // Bulk selection toggle
-  const toggleBulk = (id) => {
-    setSelectedBulk((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
+  // ------- Verify mutation -------
+  const verifyMutation = useMutation({
+    mutationFn: ({ id, isVerified }) =>
+      api.patch(`/users/verify/${id}`, { isVerified }),
+    onMutate: (vars) =>
+      optimisticUpdate({ id: vars.id, patch: { isVerified: vars.isVerified } }),
+    onError: (err, vars, context) => handleErrorRollback(context),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["members"] }),
+    onSuccess: () => toast.success("Verification status updated"),
+  });
+
+  const handleVerificationChange = (id, isVerified) => {
+    verifyMutation.mutate({ id, isVerified });
   };
 
-  // Bulk delete handler
-  const bulkDelete = async () => {
-    if (!selectedBulk.length) return toast.info("Select at least one user");
-    if (
-      !window.confirm(
-        `Delete ${selectedBulk.length} users? This cannot be undone.`
-      )
-    )
-      return;
-    try {
-      await api.post("/admin/users/bulk-delete", { ids: selectedBulk });
-      setMembers((prev) => prev.filter((m) => !selectedBulk.includes(m.id)));
-      setSelectedBulk([]);
-      toast.success("Deleted selected users");
-    } catch (err) {
-      toast.error("Bulk delete failed");
-    }
+  // ------- Delete mutation -------
+  const deleteMutation = useMutation({
+    mutationFn: (id) => api.delete(`/users/${id}`),
+    onMutate: async (idToDelete) => {
+      await queryClient.cancelQueries({
+        queryKey: ["members", page, limit, q],
+      });
+      const previous = queryClient.getQueryData({
+        queryKey: ["members", page, limit, q],
+      });
+      queryClient.setQueryData(
+        { queryKey: ["members", page, limit, q] },
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            members: old.members.filter((m) => m.id !== idToDelete),
+          };
+        }
+      );
+      return { previous };
+    },
+    onError: (err, variables, context) => handleErrorRollback(context),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["members"] }),
+    onSuccess: () => toast.success("Member deleted"),
+  });
+
+  const handleDelete = (id) => {
+    deleteMutation.mutate(id);
+    setSelectedDelete(null);
   };
 
-  if (loading) {
+  // When changing page/limit/search, reset page and close delete modal if open
+  const onPageChange = (p) => {
+    setPage(p);
+    setSelectedDelete(null);
+  };
+
+  // Responsive helpers
+  const isBusy =
+    isFetching ||
+    roleMutation.isPending ||
+    verifyMutation.isPending ||
+    deleteMutation.isPending;
+
+  // UI Loading / Error
+  if (isLoading) {
     return (
       <div className="space-y-4">
         <div className="w-64 h-8 rounded bg-secondary-100 animate-pulse" />
@@ -145,48 +183,63 @@ const ManageMembers = () => {
     );
   }
 
+  if (isError) {
+    return (
+      <div className="p-4 text-red-600">
+        Failed to load members. Check the network.
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Confirm Modal */}
+      <ConfirmModal
+        open={!!selectedDelete}
+        title="Delete member"
+        description={`Are you sure you want to delete ${selectedDelete?.name}? This action cannot be undone.`}
+        onCancel={() => setSelectedDelete(null)}
+        onConfirm={() => handleDelete(selectedDelete.id)}
+      />
+
+      {/* Header & Controls */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-3xl font-bold text-text-primary">Manage Members</h1>
 
-        {/* Responsive controls */}
         <div className="flex flex-col w-full gap-2 sm:flex-row sm:items-center sm:gap-3 sm:w-auto">
           <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            value={q}
+            onChange={(e) => {
+              setQ(e.target.value);
+              setPage(1);
+            }}
             placeholder="Search by name or email..."
             className="flex-1 min-w-0 px-3 py-2 border rounded-md bg-background"
           />
-          <button
-            onClick={bulkDelete}
-            className="flex-shrink-0 px-4 py-2 text-white rounded-md bg-error"
+
+          <select
+            value={limit}
+            onChange={(e) => {
+              setLimit(Number(e.target.value));
+              setPage(1);
+            }}
+            className="px-3 py-2 border rounded-md bg-background"
+            aria-label="Items per page"
           >
-            Delete Selected
-          </button>
+            {[5, 10, 20, 50].map((n) => (
+              <option key={n} value={n}>
+                {n} / page
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
       {/* Table */}
       <div className="overflow-x-auto">
-        {/* Desktop table */}
         <table className="hidden min-w-full divide-y divide-gray-200 sm:table">
           <thead className="bg-gray-50">
             <tr>
-              <th className="p-3">
-                <input
-                  type="checkbox"
-                  onChange={(e) =>
-                    setSelectedBulk(
-                      e.target.checked ? members.map((m) => m.id) : []
-                    )
-                  }
-                  checked={
-                    selectedBulk.length === members.length && members.length > 0
-                  }
-                />
-              </th>
               <th className="px-6 py-3 text-xs font-medium text-left uppercase text-text-secondary">
                 Name
               </th>
@@ -199,23 +252,49 @@ const ManageMembers = () => {
               <th className="px-6 py-3 text-xs font-medium text-left uppercase text-text-secondary">
                 Status
               </th>
+              <th className="px-6 py-3 text-xs font-medium text-left uppercase text-text-secondary">
+                Verified
+              </th>
               <th className="px-6 py-3 text-xs font-medium text-right uppercase text-text-secondary">
                 Actions
               </th>
             </tr>
           </thead>
+
           <tbody className="divide-y divide-gray-100">
-            {filtered.map((member) => (
+            {members.map((member) => (
               <tr key={member.id}>
-                <td className="p-3">
-                  <input
-                    type="checkbox"
-                    checked={selectedBulk.includes(member.id)}
-                    onChange={() => toggleBulk(member.id)}
-                  />
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={
+                        member.avatar ||
+                        `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                          member.name || "U"
+                        )}`
+                      }
+                      alt={member.name}
+                      className="object-cover rounded-full w-9 h-9"
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                          member.name || "U"
+                        )}`;
+                      }}
+                    />
+                    <div>
+                      <div className="font-medium text-text-primary">
+                        {member.name}
+                      </div>
+                      <div className="text-xs text-text-secondary">
+                        Joined {new Date(member.createdAt).toLocaleDateString()}
+                      </div>
+                    </div>
+                  </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">{member.name}</td>
+
                 <td className="px-6 py-4 whitespace-nowrap">{member.email}</td>
+
                 <td className="px-6 py-4 whitespace-nowrap">
                   <select
                     value={member.role}
@@ -223,6 +302,7 @@ const ManageMembers = () => {
                       handleRoleChange(member.id, e.target.value)
                     }
                     className="px-2 py-1 border rounded"
+                    disabled={roleMutation.isPending || isBusy}
                   >
                     {roles.map((r) => (
                       <option key={r.value} value={r.value}>
@@ -231,28 +311,45 @@ const ManageMembers = () => {
                     ))}
                   </select>
                 </td>
+
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span
                     className={`px-2 py-1 rounded text-xs ${
                       member.status === "active"
-                        ? "bg-success/10 text-success"
-                        : "bg-error/10 text-error"
+                        ? "bg-green-100 text-green-700"
+                        : "bg-red-100 text-red-700"
                     }`}
                   >
                     {member.status}
                   </span>
                 </td>
+
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={member.isVerified}
+                    onChange={(e) =>
+                      handleVerificationChange(member.id, e.target.checked)
+                    }
+                    className="w-4 h-4 rounded form-checkbox text-primary"
+                    disabled={verifyMutation.isPending || isBusy}
+                    aria-label={`Toggle verified for ${member.name}`}
+                  />
+                </td>
+
                 <td className="px-6 py-4 space-x-2 text-right whitespace-nowrap">
                   <button
                     onClick={() => setSelectedDelete(member)}
                     className="px-3 py-1 text-white rounded bg-error"
+                    disabled={deleteMutation.isPending || isBusy}
                   >
                     Delete
                   </button>
                 </td>
               </tr>
             ))}
-            {filtered.length === 0 && (
+
+            {members.length === 0 && (
               <tr>
                 <td colSpan={6} className="py-6 text-center text-gray-500">
                   No members found.
@@ -264,29 +361,46 @@ const ManageMembers = () => {
 
         {/* Mobile card view */}
         <div className="space-y-4 sm:hidden">
-          {filtered.map((member) => (
+          {members.map((member) => (
             <div
               key={member.id}
               className="flex flex-col gap-2 p-4 bg-white shadow rounded-2xl"
             >
               <div className="flex items-center justify-between">
-                <div className="font-medium truncate text-text-primary">
-                  {member.name}
+                <div className="flex items-center min-w-0 gap-3">
+                  <img
+                    src={
+                      member.avatar ||
+                      `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                        member.name || "U"
+                      )}`
+                    }
+                    alt={member.name}
+                    className="object-cover w-12 h-12 rounded-full"
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                        member.name || "U"
+                      )}`;
+                    }}
+                  />
+                  <div className="min-w-0">
+                    <div className="font-medium truncate text-text-primary">
+                      {member.name}
+                    </div>
+                    <div className="text-xs truncate text-text-secondary">
+                      {member.email}
+                    </div>
+                  </div>
                 </div>
-                <input
-                  type="checkbox"
-                  checked={selectedBulk.includes(member.id)}
-                  onChange={() => toggleBulk(member.id)}
-                />
               </div>
-              <div className="text-xs truncate text-text-secondary">
-                {member.email}
-              </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+
+              <div className="flex flex-wrap items-center gap-2">
                 <select
                   value={member.role}
                   onChange={(e) => handleRoleChange(member.id, e.target.value)}
                   className="flex-1 min-w-0 px-2 py-1 text-sm border rounded"
+                  disabled={roleMutation.isPending || isBusy}
                 >
                   {roles.map((r) => (
                     <option key={r.value} value={r.value}>
@@ -294,27 +408,63 @@ const ManageMembers = () => {
                     </option>
                   ))}
                 </select>
+
                 <span
                   className={`px-2 py-1 rounded text-xs ${
                     member.status === "active"
-                      ? "bg-success/10 text-success"
-                      : "bg-error/10 text-error"
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-700"
                   }`}
                 >
                   {member.status}
                 </span>
+
+                <label className="flex items-center space-x-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={member.isVerified}
+                    onChange={(e) =>
+                      handleVerificationChange(member.id, e.target.checked)
+                    }
+                    className="w-4 h-4 rounded form-checkbox text-primary"
+                    disabled={verifyMutation.isPending || isBusy}
+                  />
+                  <span>Verified</span>
+                </label>
               </div>
+
               <div className="flex justify-end">
                 <button
                   onClick={() => setSelectedDelete(member)}
                   className="px-3 py-1 text-white rounded bg-error"
+                  disabled={deleteMutation.isPending || isBusy}
                 >
                   Delete
                 </button>
               </div>
             </div>
           ))}
+
+          {members.length === 0 && (
+            <div className="py-6 text-center text-gray-500">
+              No members found.
+            </div>
+          )}
         </div>
+      </div>
+
+      {/* Footer: pagination controls */}
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+        <div className="text-sm text-text-secondary">
+          Page {currentPage} of {totalPages}{" "}
+          {isFetching && <span className="ml-2 text-xs">Updating…</span>}
+        </div>
+
+        <Pagination
+          page={currentPage}
+          totalPages={totalPages}
+          setPage={onPageChange}
+        />
       </div>
     </div>
   );

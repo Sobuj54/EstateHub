@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import Icon from "components/AppIcon";
 import useAuthContext from "hooks/useAuthContext";
+import { ToastContainer } from "react-toastify";
 
 const AdminLayout = () => {
   // Collapsed state for large screens sidebar (w-24/w-64)
@@ -31,6 +32,18 @@ const AdminLayout = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="colored"
+      />
       {/* Mobile Header (visible only on small screens) */}
       <header className="sticky top-0 z-30 flex items-center justify-between p-4 border-b md:hidden border-border bg-surface">
         <div

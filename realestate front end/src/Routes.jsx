@@ -7,7 +7,6 @@ import ErrorBoundary from "components/ErrorBoundary";
 // Page imports
 import Homepage from "pages/homepage";
 import PropertyListings from "pages/property-listings";
-import PropertyDetails from "pages/property-details";
 import NotFound from "pages/NotFound";
 import Login from "pages/auth/login";
 import Signup from "pages/auth/Register";
@@ -15,11 +14,12 @@ import ForgotPassword from "pages/auth/FogotPassword";
 import ResetPassword from "pages/auth/ResetPassword";
 import Unauthorized from "pages/unauthorized/Unauthorized";
 import ProtectedRoute from "components/ProtectedRoute";
-import MemberRoutes from "MemberRoutes";
 
 const AdminRoutes = lazy(() => import("AdminRoutes"));
 const UserProfileSettings = lazy(() => import("pages/user-profile-settings"));
 const AgentDashboard = lazy(() => import("pages/agent-dashboard"));
+const MemberRoutes = lazy(() => import("MemberRoutes"));
+const PropertyDetails = lazy(() => import("pages/property-details"));
 
 const Routes = () => {
   return (

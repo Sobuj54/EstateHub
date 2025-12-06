@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import Icon from "components/AppIcon";
 import useAdminDashboardData from "hooks/useDashboardSummary";
 import { formatDate } from "utils/formatDate";
+import PropertyDetailModal from "components/ui/PropertyDetailsModal";
+import AgentProfileModal from "components/ui/AgentProfileModal";
 
 // MOCK data (Used for structure reference and CSV export)
 const MOCK = {
@@ -16,8 +18,10 @@ const MOCK = {
 
 const AdminDashboard = () => {
   const [mockMode, setMockMode] = useState(false);
+  // 🔑 New state for modal content
+  const [selectedProperty, setSelectedProperty] = useState(null);
+  const [selectedAgent, setSelectedAgent] = useState(null);
 
-  // 🔑 Use the custom hook to get data and state
   const {
     data: apiData,
     isLoading,
@@ -27,28 +31,21 @@ const AdminDashboard = () => {
   } = useAdminDashboardData(mockMode);
 
   // --- Data Mapping and Consolidation ---
-
-  // Use a fallback object for destructuring safety if data is null/undefined
   const dashboardData = apiData || {};
 
-  // Consolidate and map stats for rendering
   const stats = {
     totalAgents: dashboardData.totalActiveAgents ?? MOCK.stats.totalAgents,
     totalMembers: dashboardData.totalMembers ?? MOCK.stats.totalMembers,
     totalProperties:
       dashboardData.totalProperties ?? MOCK.stats.totalProperties,
     newMembers: dashboardData.newMembersCount ?? MOCK.stats.newMembers,
-    // Calculate propertiesThisMonth count based on the array length
     propertiesThisMonth:
       dashboardData.recentProperties?.length ?? MOCK.stats.propertiesThisMonth,
   };
 
-  // Assign list data with safe fallbacks
   const recentProperties = dashboardData.recentProperties || [];
   const topAgents = dashboardData.topAgents || [];
 
-  // Determine if we should show the loading skeleton
-  // We show a skeleton if we are loading AND we don't have any data yet, AND we are not in mock mode.
   const showSkeleton = isLoading && !apiData && !mockMode;
 
   // --- Render Logic ---
@@ -69,7 +66,6 @@ const AdminDashboard = () => {
     );
   }
 
-  // If there's an error and we aren't in mock mode, log it for debugging
   if (isError && !mockMode) {
     console.error("Dashboard data fetch failed:", error);
   }
@@ -80,7 +76,6 @@ const AdminDashboard = () => {
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <h1 className="text-2xl font-bold sm:text-3xl text-text-primary">
           Admin Dashboard
-          {/* Visual indicator for background fetching */}
           {isFetching && (
             <span className="ml-3 text-sm font-light text-primary-500 animate-pulse">
               Refreshing...
@@ -204,7 +199,10 @@ const AdminDashboard = () => {
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <button className="px-3 py-1 text-xs text-white rounded bg-primary">
+                  <button
+                    onClick={() => setSelectedProperty(p)} // 🔑 Open Property Modal
+                    className="px-3 py-1 text-xs text-white transition rounded bg-primary hover:bg-primary-600"
+                  >
                     View
                   </button>
                 </div>
@@ -231,7 +229,10 @@ const AdminDashboard = () => {
                   </div>
                 </div>
                 <div>
-                  <button className="px-3 py-1 text-xs border rounded">
+                  <button
+                    onClick={() => setSelectedAgent(a)} // 🔑 Open Agent Modal
+                    className="px-3 py-1 text-xs transition border rounded hover:bg-gray-50"
+                  >
                     Profile
                   </button>
                 </div>
@@ -240,6 +241,16 @@ const AdminDashboard = () => {
           </ul>
         </div>
       </div>
+
+      {/* RENDER MODALS */}
+      <PropertyDetailModal
+        property={selectedProperty}
+        onClose={() => setSelectedProperty(null)}
+      />
+      <AgentProfileModal
+        agent={selectedAgent}
+        onClose={() => setSelectedAgent(null)}
+      />
     </div>
   );
 };

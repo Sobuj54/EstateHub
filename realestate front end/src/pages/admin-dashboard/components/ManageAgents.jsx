@@ -1,120 +1,244 @@
-import React, { useEffect, useMemo, useState } from "react";
-import {
-  useReactTable,
-  getCoreRowModel,
-  flexRender,
-} from "@tanstack/react-table";
+import { useMutation, useQueryClient } from "@tanstack/react-query"; // <-- Added useQueryClient
 import ConfirmModal from "components/ui/ConfirmModal";
+import useAgents from "hooks/useAgents";
 import useAxiosSecure from "hooks/useAxiosSecure";
-import { toast } from "react-toastify";
-
-const MOCK_AGENTS = [
-  { id: 1, name: "John Smith", email: "john@example.com", status: "Active" },
-  { id: 2, name: "Jane Doe", email: "jane@example.com", status: "Inactive" },
-  { id: 3, name: "Alice Brown", email: "alice@example.com", status: "Active" },
-];
+import { useMemo, useState } from "react";
+import { toast } from "react-toastify"; // Ensure toast is imported
 
 const ManageAgents = () => {
   const api = useAxiosSecure();
-  const [agents, setAgents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [toDelete, setToDelete] = useState(null);
+  const queryClient = useQueryClient(); // <-- Correctly initialized
+
+  // State for pagination and search
+  const [pageNo, setPageNo] = useState(1);
+  const [limit, setLimit] = useState(10);
   const [query, setQuery] = useState("");
+  const [toDelete, setToDelete] = useState(null);
 
-  useEffect(() => {
-    let mounted = true;
+  // --- QUERY KEY DEFINITION ---
+  // This key MUST match the key used in your useAgents hook for optimistic updates to work.
+  const queryKey = ["agents", { pageNo, limit, query }];
 
-    const fetchAgents = async () => {
-      setLoading(true);
-      try {
-        const res = await api.get("/admin/agents");
-        const data = res?.data?.data;
-        if (!mounted) return;
-        setAgents(Array.isArray(data) && data.length ? data : MOCK_AGENTS);
-      } catch (err) {
-        console.warn("Failed to fetch agents, using mock data.", err);
-        if (!mounted) return;
-        setAgents(MOCK_AGENTS);
-      } finally {
-        if (!mounted) return;
-        setLoading(false);
-      }
-    };
+  // Fetch data using the custom hook
+  const { data, isLoading, isFetching, isPreviousData, isError } = useAgents(
+    pageNo,
+    limit,
+    query
+  );
 
-    fetchAgents();
-    return () => (mounted = false);
-  }, [api]);
+  // Note: Assuming 'users' key holds the agent data, as per your structure
+  const agents = data?.users || [];
+  const totalPages = data?.totalPages || 1;
+  const totalCount = data?.totalCount || 0;
 
-  const toggleStatus = async (id) => {
-    setAgents((prev) =>
-      prev.map((a) =>
-        a.id === id
-          ? { ...a, status: a.status === "Active" ? "Inactive" : "Active" }
-          : a
-      )
-    );
-    try {
-      await api.patch(`/admin/agents/${id}/status`, {});
-      toast.success("Agent status updated");
-    } catch (err) {
-      toast.info("Updated locally (API unreachable).");
+  // --- OPTIMISTIC UPDATE HELPER ---
+  const optimisticUpdate = async (id, fields) => {
+    // 1. Cancel any current fetching for this key
+    await queryClient.cancelQueries({ queryKey });
+
+    // 2. Snapshot the previous data
+    const previousAgentsData = queryClient.getQueryData(queryKey);
+
+    // 3. Optimistically update the cache
+    queryClient.setQueryData(queryKey, (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        users: old.users.map((a) => (a._id === id ? { ...a, ...fields } : a)),
+      };
+    });
+
+    return { previousAgentsData }; // Return snapshot for error rollback
+  };
+
+  const handleMutationError = (context) => {
+    toast.error("An error occurred. Rolling back changes.");
+    // Rollback to the snapshot
+    queryClient.setQueryData(queryKey, context.previousAgentsData);
+  };
+
+  // --- MUTATION FUNCTIONS ---
+
+  // 1. Toggle Verification Status
+  const toggleVerificationMutation = useMutation({
+    // MutationFn accepts an object: { id, isVerified }
+    mutationFn: ({ id, isVerified }) =>
+      // API call now includes the new state in the body
+      api.patch(`/users/verify/${id}`, { isVerified }),
+
+    onMutate: ({ id, isVerified }) => optimisticUpdate(id, { isVerified }),
+    onError: (err, variables, context) => handleMutationError(context),
+    // Invalidate the query to refetch/sync with server after success or failure
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["agents"] }),
+    onSuccess: () => toast.success("Verification status updated successfully."),
+  });
+
+  // 2. Change Role (Handles 'member', 'agent', 'admin')
+  const changeRoleMutation = useMutation({
+    mutationFn: ({ id, newRole }) =>
+      api.patch(`/users/change-role/${id}`, { role: newRole }),
+
+    onMutate: ({ id, newRole }) => optimisticUpdate(id, { role: newRole }),
+    onError: (err, variables, context) => handleMutationError(context),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["agents"] }),
+    onSuccess: (data, { newRole }) => {
+      toast.success(`Role updated to ${newRole.toUpperCase()}.`);
+    },
+  });
+
+  // 3. Delete Agent
+  const deleteMutation = useMutation({
+    mutationFn: (id) => api.delete(`/users/${id}`),
+
+    // Optional: Add optimistic delete for a smoother UI experience
+    onMutate: async (idToDelete) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previousAgentsData = queryClient.getQueryData(queryKey);
+
+      queryClient.setQueryData(queryKey, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          users: old.users.filter((a) => a._id !== idToDelete),
+        };
+      });
+      return { previousAgentsData };
+    },
+
+    onSuccess: () => {
+      toast.success("Agent deleted successfully.");
+      setToDelete(null);
+    },
+    onError: (err, variables, context) => {
+      toast.error("Failed to delete agent. Rolling back.");
+      // Rollback for delete
+      queryClient.setQueryData(queryKey, context.previousAgentsData);
+    },
+    // Invalidate the query to refetch the list after deletion (important for accurate pagination/counts)
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["agents"] }),
+  });
+
+  const handleDeleteConfirm = () => {
+    if (toDelete) {
+      deleteMutation.mutate(toDelete._id);
     }
   };
 
-  const deleteAgent = async (id) => {
-    try {
-      await api.delete(`/admin/agents/${id}`);
-      setAgents((prev) => prev.filter((a) => a.id !== id));
-      setToDelete(null);
-      toast.success("Agent deleted");
-    } catch (err) {
-      setAgents((prev) => prev.filter((a) => a.id !== id));
-      setToDelete(null);
-      toast.info("Agent deleted locally (API unreachable).");
-    }
-  };
-
-  const filteredAgents = useMemo(() => {
-    if (!query.trim()) return agents;
-    return agents.filter(
-      (a) =>
-        a.name.toLowerCase().includes(query.toLowerCase()) ||
-        a.email.toLowerCase().includes(query.toLowerCase())
-    );
-  }, [agents, query]);
-
+  // --- COLUMN DEFINITIONS ---
   const columns = useMemo(
     () => [
       { accessorKey: "name", header: "Name" },
       { accessorKey: "email", header: "Email" },
+      // Verification Status Column
       {
-        accessorKey: "status",
-        header: "Status",
-        cell: ({ row }) => {
-          const agent = row.original;
+        accessorKey: "isVerified",
+        header: "Verified",
+        cell: ({ agent }) => {
+          const isVerified = agent.isVerified;
+          const isPending =
+            toggleVerificationMutation.isPending &&
+            toggleVerificationMutation.variables?.id === agent._id;
+
           return (
             <button
-              onClick={() => toggleStatus(agent.id)}
-              className={`px-3 py-1 rounded ${
-                agent.status === "Active"
-                  ? "bg-success/10 text-success"
-                  : "bg-error/10 text-error"
+              onClick={() =>
+                // Pass the ID and the new status (the opposite of the current status)
+                toggleVerificationMutation.mutate({
+                  id: agent._id,
+                  isVerified: !isVerified, // Toggle the status
+                })
+              }
+              className={`px-3 py-1 text-sm rounded transition-colors shadow-sm ${
+                isVerified
+                  ? "bg-green-100 text-green-700 hover:bg-green-200"
+                  : "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
               }`}
+              disabled={isPending}
             >
-              {agent.status}
+              {isPending
+                ? "Updating..."
+                : isVerified
+                ? "Verified"
+                : "Unverified"}
             </button>
           );
         },
       },
+      // Role Change Column
+      {
+        accessorKey: "role",
+        header: "Role",
+        cell: ({ agent }) => {
+          const currentRole = agent.role;
+          const isUpdating =
+            changeRoleMutation.isPending &&
+            changeRoleMutation.variables?.id === agent._id;
+
+          // Note: Assuming "super_admin" is excluded from this list for security
+          const roles = ["member", "agent", "admin"];
+
+          const handleSelectChange = (e) => {
+            const newRole = e.target.value;
+            if (newRole !== currentRole) {
+              changeRoleMutation.mutate({ id: agent._id, newRole });
+            }
+          };
+
+          let roleColorClass;
+          if (currentRole === "admin") {
+            roleColorClass =
+              "bg-red-100 text-red-700 border-red-300 hover:bg-red-200";
+          } else if (currentRole === "agent") {
+            roleColorClass =
+              "bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-200";
+          } else {
+            roleColorClass =
+              "bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200";
+          }
+
+          return (
+            <div className="relative">
+              <select
+                value={currentRole}
+                onChange={handleSelectChange}
+                disabled={isUpdating}
+                className={`py-1.5 pl-3 pr-8 text-sm font-medium rounded-lg appearance-none cursor-pointer transition-colors shadow-sm focus:ring-blue-500 focus:border-blue-500 border w-28 ${roleColorClass}`}
+              >
+                {isUpdating ? (
+                  <option value={currentRole}>Updating...</option>
+                ) : (
+                  roles.map((role) => (
+                    <option key={role} value={role}>
+                      {role.charAt(0).toUpperCase() + role.slice(1)}
+                    </option>
+                  ))
+                )}
+              </select>
+              {!isUpdating && (
+                <div className="absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 pointer-events-none">
+                  <svg
+                    className="w-4 h-4 fill-current"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                  >
+                    <path d="M9.293 12.95l.707.707L15 10l-4.293-4.293-.707.707L12.586 9H5v2h7.586l-3.293 3.293z" />
+                  </svg>
+                </div>
+              )}
+            </div>
+          );
+        },
+      },
+      // Actions Column (Delete)
       {
         id: "actions",
         header: "",
-        cell: ({ row }) => {
-          const agent = row.original;
+        cell: ({ agent }) => {
           return (
             <button
               onClick={() => setToDelete(agent)}
-              className="px-3 py-1 text-sm text-white rounded bg-error"
+              className="px-3 py-1 text-sm text-white transition bg-red-600 rounded shadow-md hover:bg-red-700"
+              disabled={deleteMutation.isPending}
             >
               Delete
             </button>
@@ -122,129 +246,189 @@ const ManageAgents = () => {
         },
       },
     ],
-    []
+    // Dependencies now include query state for accurate cache targeting
+    [
+      toggleVerificationMutation,
+      changeRoleMutation,
+      deleteMutation,
+      pageNo,
+      limit,
+      query,
+    ]
   );
 
-  const table = useReactTable({
-    data: filteredAgents,
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-  });
+  // Custom Cell Renderer function
+  const renderCell = (agent, column) => {
+    if (column.cell) {
+      return column.cell({ agent });
+    }
+    return agent[column.accessorKey];
+  };
 
-  if (loading) {
+  // --- RENDER LOGIC ---
+
+  if (isLoading && !isPreviousData) {
     return (
-      <div className="space-y-4">
-        <div className="w-64 h-8 rounded bg-secondary-100 animate-pulse" />
+      <div className="p-6 space-y-4 rounded-xl bg-gray-50">
+        <div className="w-64 h-8 bg-gray-200 rounded animate-pulse" />
         {[...Array(4)].map((_, i) => (
-          <div
-            key={i}
-            className="h-12 rounded bg-secondary-100 animate-pulse"
-          />
+          <div key={i} className="h-12 bg-gray-100 rounded animate-pulse" />
         ))}
       </div>
     );
   }
 
+  if (isError) {
+    return (
+      <div className="p-6 text-center text-red-700 bg-red-100 border border-red-300 shadow-md rounded-xl">
+        Error loading agents. Please check the API connectivity.
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-3xl font-bold text-text-primary">Manage Agents</h1>
-        <div className="flex flex-col w-full gap-2 sm:w-auto sm:gap-3 sm:flex-row">
+    <div className="p-4 space-y-6 font-sans md:p-8 bg-gray-50">
+      {/* Header and Search */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-3xl font-extrabold text-gray-900">
+          Agent Management ({totalCount})
+          {isFetching && (
+            <span className="ml-3 text-sm text-blue-500 animate-pulse">
+              (Loading...)
+            </span>
+          )}
+        </h1>
+        <div className="flex flex-col w-full gap-2 sm:w-80">
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPageNo(1); // Reset to page 1 on search
+            }}
             placeholder="Search by name or email..."
-            className="flex-1 min-w-0 px-3 py-2 border rounded-md bg-background"
+            className="w-full px-4 py-2 transition border border-gray-300 shadow-sm rounded-xl focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto bg-white shadow rounded-2xl">
+      {/* Table & Cards */}
+      <div className="overflow-hidden bg-white border border-gray-200 shadow-2xl rounded-2xl">
         {/* Desktop table */}
-        <table className="hidden min-w-full sm:table">
-          <thead className="bg-gray-50">
-            {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <th
-                    key={header.id}
-                    className="px-6 py-3 text-xs font-medium text-left uppercase text-text-secondary"
-                  >
-                    {flexRender(
-                      header.column.columnDef.header,
-                      header.getContext()
-                    )}
-                  </th>
-                ))}
-              </tr>
-            ))}
+        <table className="hidden min-w-full divide-y divide-gray-200 sm:table">
+          <thead className="bg-gray-100">
+            <tr>
+              {columns.map((column) => (
+                <th
+                  key={column.accessorKey || column.id}
+                  className="px-6 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase"
+                >
+                  {column.header}
+                </th>
+              ))}
+            </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {table.getRowModel().rows.map((row) => (
-              <tr key={row.id}>
-                {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="px-6 py-4">
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+            {agents.map((agent) => (
+              <tr key={agent._id} className="transition hover:bg-gray-50">
+                {columns.map((column) => (
+                  <td
+                    key={column.accessorKey || column.id}
+                    className="px-6 py-4 text-sm text-gray-800 whitespace-nowrap"
+                  >
+                    {renderCell(agent, column)}
                   </td>
                 ))}
               </tr>
             ))}
+            {agents.length === 0 && (
+              <tr>
+                <td
+                  colSpan={columns.length}
+                  className="py-8 text-center text-gray-500"
+                >
+                  No agents found.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
 
         {/* Mobile cards */}
         <div className="p-4 space-y-4 sm:hidden">
-          {filteredAgents.map((agent) => (
+          {agents.map((agent) => (
             <div
-              key={agent.id}
-              className="flex flex-col gap-2 p-4 bg-white shadow rounded-2xl"
+              key={agent._id}
+              className="flex flex-col gap-3 p-4 bg-white border border-gray-100 shadow-lg rounded-xl"
             >
               <div className="flex items-center justify-between">
-                <div className="font-medium truncate text-text-primary">
+                <div className="font-bold text-gray-900 truncate">
                   {agent.name}
                 </div>
+                {/* Actions column on mobile */}
+                {renderCell(
+                  agent,
+                  columns.find((c) => c.id === "actions")
+                )}
               </div>
-              <div className="text-xs truncate text-text-secondary">
+              <div className="text-sm text-gray-600 truncate">
                 {agent.email}
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <button
-                  onClick={() => toggleStatus(agent.id)}
-                  className={`px-3 py-1 rounded ${
-                    agent.status === "Active"
-                      ? "bg-success/10 text-success"
-                      : "bg-error/10 text-error"
-                  }`}
-                >
-                  {agent.status}
-                </button>
-              </div>
-              <div className="flex justify-end">
-                <button
-                  onClick={() => setToDelete(agent)}
-                  className="px-3 py-1 text-white rounded bg-error"
-                >
-                  Delete
-                </button>
+              <div className="flex flex-wrap gap-2">
+                {/* Role Change */}
+                {renderCell(
+                  agent,
+                  columns.find((c) => c.accessorKey === "role")
+                )}
+                {/* Verification */}
+                {renderCell(
+                  agent,
+                  columns.find((c) => c.accessorKey === "isVerified")
+                )}
               </div>
             </div>
           ))}
-          {filteredAgents.length === 0 && (
-            <div className="py-6 text-center text-gray-500">
+          {agents.length === 0 && (
+            <div className="py-8 text-center text-gray-500">
               No agents found.
             </div>
           )}
         </div>
       </div>
 
+      {/* Pagination Controls */}
+      <div className="flex items-center justify-between pt-4">
+        <span className="text-sm font-medium text-gray-600">
+          Showing {agents.length} of {agents.length} total agents.
+        </span>
+        <div className="flex space-x-3">
+          <button
+            onClick={() => setPageNo((old) => Math.max(old - 1, 1))}
+            disabled={pageNo === 1 || isFetching}
+            className="px-4 py-2 text-sm font-medium text-gray-700 transition bg-white border border-gray-300 rounded-lg shadow-sm disabled:opacity-50 hover:bg-gray-100"
+          >
+            &larr; Previous (Page {pageNo > 1 ? pageNo - 1 : 1})
+          </button>
+          <button
+            onClick={() => {
+              if (pageNo < totalPages) {
+                setPageNo((old) => old + 1);
+              }
+            }}
+            disabled={pageNo >= totalPages || isFetching}
+            className="px-4 py-2 text-sm font-medium text-white transition bg-blue-600 rounded-lg shadow-md disabled:opacity-50 hover:bg-blue-700"
+          >
+            Next (Page {pageNo < totalPages ? pageNo + 1 : totalPages}) &rarr;
+          </button>
+        </div>
+      </div>
+
+      {/* Delete Confirmation Modal */}
       <ConfirmModal
         open={!!toDelete}
-        title="Delete agent"
-        description={`Are you sure you want to delete ${toDelete?.name}?`}
+        title="Delete Agent Confirmation"
+        description={`Are you sure you want to permanently delete agent ${toDelete?.name} (${toDelete?.email})? This action cannot be undone.`}
         onCancel={() => setToDelete(null)}
-        onConfirm={() => deleteAgent(toDelete.id)}
+        onConfirm={handleDeleteConfirm}
       />
     </div>
   );

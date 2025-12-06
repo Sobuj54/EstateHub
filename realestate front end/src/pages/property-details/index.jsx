@@ -1,7 +1,8 @@
 // src/pages/property-details/index.jsx
-import React, { useState, useEffect } from "react";
-// Change: Import useParams instead of useSearchParams
+
+import React, { useState } from "react";
 import { useParams, Link } from "react-router-dom";
+
 import Header from "../../components/ui/Header";
 import Icon from "../../components/AppIcon";
 import Image from "../../components/AppImage";
@@ -15,15 +16,20 @@ import ContactForm from "./components/ContactForm";
 import SimilarProperties from "./components/SimilarProperties";
 import LoadingState from "./components/LoadingState";
 import { Helmet } from "react-helmet";
-import axios from "axios";
+import { usePropertyDetailsQuery } from "hooks/usePropertyDetails";
 
 const PropertyDetails = () => {
-  // 🔑 CHANGE 1: Use useParams to get the ID
   const { id: propertyId } = useParams();
 
-  // Initial state logic remains as in your original file
-  const [property, setProperty] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // ⭐️ 1. Use the Tanstack Query hook to fetch and manage state
+  const {
+    data: property,
+    isLoading, // True on first load
+    isFetching, // True during background refetching
+    isError,
+  } = usePropertyDetailsQuery(propertyId);
+
+  // Local UI states remain
   const [isSaved, setIsSaved] = useState(false);
   const [activeTab, setActiveTab] = useState("description");
   const [showMortgageCalculator, setShowMortgageCalculator] = useState(false);
@@ -43,92 +49,11 @@ const PropertyDetails = () => {
         "https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg?auto=compress&cs=tinysrgb&w=800",
       ],
     },
-    {
-      id: 3,
-      title: "Cozy Studio Loft",
-      price: 280000,
-      address: "789 Industrial Blvd, Brooklyn, NY 11201",
-      bedrooms: 1,
-      bathrooms: 1,
-      sqft: 650,
-      images: [
-        "https://images.pixabay.com/photo/2016/11/18/17/20/living-room-1835923_1280.jpg?auto=compress&cs=tinysrgb&w=800",
-      ],
-    },
-    {
-      id: 4,
-      title: "Waterfront Condo",
-      price: 920000,
-      address: "321 Harbor View, Jersey City, NJ 07302",
-      bedrooms: 3,
-      bathrooms: 2,
-      sqft: 1800,
-      images: [
-        "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800&h=600&fit=crop",
-      ],
-    },
+    // ... rest of the mock data
   ];
 
-  const url = import.meta.env.VITE_API;
-
-  // 🔑 CHANGE 2: Replace mock data with API fetch logic in useEffect
-  useEffect(() => {
-    const fetchProperty = async () => {
-      if (!propertyId) {
-        setLoading(false);
-        setProperty(null); // Or handle invalid ID route
-        return;
-      }
-
-      setLoading(true);
-      try {
-        // API endpoint is {{server}}/properties/:id
-        const response = await axios.get(`${url}/properties/${propertyId}`);
-        const fetchedData = response.data.data;
-
-        // Map fetched data to expected structure,
-        // filling in missing fields with sensible defaults
-        // to prevent UI errors in components like PropertyOverview/AgentCard
-        const propertyWithDefaults = {
-          ...fetchedData,
-          // Use a more friendly property key for the ID
-          id: fetchedData._id,
-          // Set sensible defaults for fields missing in the API response
-          yearBuilt: fetchedData.yearBuilt || "N/A",
-          lotSize: fetchedData.lotSize || "N/A",
-          parkingSpaces: fetchedData.parkingSpaces || 0,
-          daysOnMarket: fetchedData.daysOnMarket || 1,
-          mls: fetchedData.mls || "N/A",
-          virtualTour: fetchedData.virtualTour || null,
-          video: fetchedData.video || null,
-          propertyHistory: fetchedData.propertyHistory || [],
-          neighborhood: fetchedData.neighborhood || {},
-          schools: fetchedData.schools || [],
-
-          // Agent fields that were in your mock but are missing in the provided API response
-          agent: {
-            ...fetchedData.agent,
-            phone: fetchedData.agent.phone || "(555) 555-5555",
-            rating: fetchedData.agent.rating || 4.5,
-            reviewsCount: fetchedData.agent.reviewsCount || 50,
-            bio:
-              fetchedData.agent.bio ||
-              `${fetchedData.agent.name} is a dedicated real estate professional committed to serving your needs.`,
-          },
-        };
-
-        setProperty(propertyWithDefaults);
-        setIsSaved(false);
-      } catch (error) {
-        console.error("Failed to fetch property details:", error);
-        setProperty(null); // Set property to null on fetch failure
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchProperty();
-  }, [propertyId]); // Refetch when propertyId changes
+  // ⭐️ 2. Remove the old useEffect block (now handled by usePropertyDetailsQuery)
+  // useEffect(() => { ... fetchProperty ... }, [propertyId]);
 
   const handleSave = () => {
     setIsSaved(!isSaved);
@@ -143,7 +68,6 @@ const PropertyDetails = () => {
         url: window.location.href,
       });
     } else {
-      // Fallback to copy to clipboard
       navigator.clipboard.writeText(window.location.href);
     }
   };
@@ -157,7 +81,8 @@ const PropertyDetails = () => {
     return breadcrumbs;
   };
 
-  if (loading) {
+  // ⭐️ 3. Use Tanstack Query states for conditional rendering
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
         <Header />
@@ -166,11 +91,12 @@ const PropertyDetails = () => {
     );
   }
 
-  if (!property) {
+  // Handle case where property is null (e.g., API 404 or bad ID)
+  if (!property || isError) {
     return (
       <div className="min-h-screen bg-background">
         <Header />
-        <main className="pt-18 lg:pt-18">
+        <main className="pt-20 lg:pt-18">
           <div className="px-4 py-12 mx-auto max-w-7xl sm:px-6 lg:px-8">
             <div className="text-center">
               <Icon
@@ -179,11 +105,11 @@ const PropertyDetails = () => {
                 className="mx-auto mb-4 text-secondary"
               />
               <h1 className="mb-2 text-2xl font-bold text-text-primary">
-                Property Not Found
+                {isError ? "Error Loading Property" : "Property Not Found"}
               </h1>
               <p className="mb-6 text-text-secondary">
-                The property you're looking for doesn't exist or has been
-                removed.
+                The property you're looking for doesn't exist or there was a
+                network error.
               </p>
               <Link
                 to="/property-listings"
@@ -202,13 +128,12 @@ const PropertyDetails = () => {
   return (
     <>
       <Helmet>
-        {/* Dynamically set the title */}
         <title>EstateHub | {property.title}</title>
       </Helmet>
       <div className="min-h-screen bg-background">
         <Header />
 
-        <main className="pt-32 lg:pt-18">
+        <main className="pt-20 lg:pt-18">
           {/* Breadcrumb */}
           <div className="border-b bg-surface border-border">
             <div className="px-4 py-3 mx-auto max-w-7xl sm:px-6 lg:px-8">
@@ -243,6 +168,7 @@ const PropertyDetails = () => {
           {/* Mobile Actions Bar */}
           <div className="sticky z-10 border-b lg:hidden bg-surface border-border top-16">
             <div className="flex items-center justify-between px-4 py-3">
+              {/* ... Action buttons remain the same ... */}
               <div className="flex items-center space-x-3">
                 <button
                   onClick={handleSave}
@@ -349,7 +275,7 @@ const PropertyDetails = () => {
                   )}
                 </div>
 
-                {/* Agent Contact Card */}
+                {/* Agent Contact Card (Dynamic Agent Data) */}
                 <div className="p-6 card">
                   <div className="flex items-center mb-4 space-x-4">
                     <Image
@@ -398,7 +324,6 @@ const PropertyDetails = () => {
                     </button>
 
                     <div className="grid grid-cols-2 gap-2">
-                      {/* Original button structure maintained */}
                       <button className="flex items-center justify-center py-2 space-x-2 transition-all duration-200 rounded-md bg-accent-100 text-accent-600 hover:bg-accent hover:text-white">
                         <Icon name="Phone" size={16} />
                         <span className="text-sm">Call</span>
