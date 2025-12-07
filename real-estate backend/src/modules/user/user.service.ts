@@ -171,14 +171,18 @@ const getAgents = async (
   });
 
   const totalPages = Math.ceil(totalAgents / limit);
-  return { users: agents, totalPages, currentPage: pageNo };
+  return {
+    users: agents,
+    totalPages,
+    currentPage: pageNo,
+    totalCount: totalAgents,
+  };
 };
 
 const verifiedAgents = async (
   limit: number,
   pageNo: number
 ): Promise<UserReturnType<IUser>> => {
-  if (limit < 0) limit = 0;
   const skip = (pageNo - 1) * limit;
   const agents = await User.find({ role: USER_ROLE.AGENT, isVerified: true })
     .limit(limit)
@@ -194,7 +198,12 @@ const verifiedAgents = async (
   });
 
   const totalPages = Math.ceil(totalAgents / limit);
-  return { users: agents, totalPages, currentPage: pageNo };
+  return {
+    users: agents,
+    totalPages,
+    currentPage: pageNo,
+    totalCount: totalAgents,
+  };
 };
 
 const getMembers = async (
@@ -216,7 +225,12 @@ const getMembers = async (
   });
 
   const totalPages = Math.ceil(totalMembers / limit);
-  return { users: members, totalPages, currentPage: pageNo };
+  return {
+    users: members,
+    totalPages,
+    currentPage: pageNo,
+    totalCount: totalMembers,
+  };
 };
 
 const updateRole = async (id: string, role: string): Promise<IUser> => {

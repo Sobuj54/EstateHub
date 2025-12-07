@@ -59,4 +59,5 @@ export type UserReturnType<T> = {
   users: T[];
   totalPages: number;
   currentPage: number;
+  totalCount: number;
 };
