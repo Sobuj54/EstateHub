@@ -23,8 +23,11 @@ const AgentProfileModal = ({ agent, onClose }) => {
       onClose={onClose}
     >
       <div className="flex flex-col items-center">
-        <div className="flex items-center justify-center w-24 h-24 mb-4 text-3xl font-bold bg-gray-200 border-4 rounded-full text-primary-600 border-primary-500">
-          {agent.name.charAt(0)}
+        <div className="flex items-center justify-center mb-4 ">
+          <img
+            src={`${agent.avatar}`}
+            className="object-cover w-24 h-24 rounded-full"
+          />
         </div>
         <h4 className="text-xl font-bold">{agent.name}</h4>
         <p className="text-sm text-text-secondary">

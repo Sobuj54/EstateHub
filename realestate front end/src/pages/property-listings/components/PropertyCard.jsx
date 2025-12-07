@@ -83,7 +83,7 @@ const PropertyCard = ({
   if (variant === "list") {
     return (
       <div
-        className={`block card hover:shadow-elevation-2 transition-all duration-200 ease-out
+        className={`block card hover:shadow-elevation-2 transition-all duration-300 ease-out
                    ${
                      isHighlighted
                        ? "ring-2 ring-primary shadow-elevation-2"

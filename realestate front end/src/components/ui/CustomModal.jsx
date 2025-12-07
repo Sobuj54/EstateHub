@@ -5,7 +5,7 @@ const CustomModal = ({ title, children, isOpen, onClose }) => {
 
   return (
     <div
-      className="absolute inset-0 z-50 flex items-center justify-center transition-opacity bg-gray-900 bg-opacity-75"
+      className="fixed inset-0 z-50 flex items-center justify-center transition-opacity bg-gray-900 bg-opacity-75"
       onClick={onClose}
     >
       <div

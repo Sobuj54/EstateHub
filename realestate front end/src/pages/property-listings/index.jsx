@@ -142,7 +142,7 @@ const PropertyListings = () => {
 
     return (
       <>
-        <div className={`space-y-6 ${isMobile ? "space-y-4" : ""}`}>
+        <div className={` ${isMobile ? "space-y-4" : "flex flex-col gap-4"}`}>
           {sortedProperties.map((property) => {
             return (
               <Link to={`/property-details/${property._id}`} key={property._id}>

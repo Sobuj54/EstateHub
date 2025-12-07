@@ -47,10 +47,13 @@ const ManageMembers = () => {
       const users = res?.data?.data?.users ?? [];
       const totalPages = res?.data?.data?.totalPages ?? 1;
       const currentPage = res?.data?.data?.currentPage ?? page;
+      const totalCount = res?.data?.data?.totalCount ?? 0;
+
       return {
         members: transformMemberData(users),
         totalPages,
         currentPage,
+        totalCount,
       };
     },
     keepPreviousData: true,
@@ -61,6 +64,7 @@ const ManageMembers = () => {
   const members = data?.members ?? [];
   const totalPages = data?.totalPages ?? 1;
   const currentPage = data?.currentPage ?? page;
+  const totalCount = data?.totalCount ?? 0;
 
   // Helper: optimistic update
   const optimisticUpdate = async ({ id, patch }) => {
@@ -445,7 +449,7 @@ const ManageMembers = () => {
             </div>
           ))}
 
-          {members.length === 0 && (
+          {totalCount === 0 && (
             <div className="py-6 text-center text-gray-500">
               No members found.
             </div>

@@ -1,121 +1,195 @@
 // src/pages/agent-dashboard/components/QuickListingForm.jsx
-import React, { useState } from 'react';
-import Icon from '../../../components/AppIcon';
+import React, { useState, useCallback } from "react";
+import Icon from "../../../components/AppIcon";
 
-const QuickListingForm = ({ onClose, onSubmit }) => {
-  const [formData, setFormData] = useState({
-    address: '',
-    city: '',
-    state: '',
-    zipCode: '',
-    price: '',
-    propertyType: '',
-    bedrooms: '',
-    bathrooms: '',
-    squareFootage: '',
-    description: '',
-    mlsIntegration: true
+import { useForm, Controller } from "react-hook-form";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import useAxiosSecure from "hooks/useAxiosSecure";
+import { toast } from "react-toastify";
+
+const API_URL = "/properties/agent/create";
+
+const useCreateListingMutation = (onSuccessCallback, onErrorCallback) => {
+  const axiosSecure = useAxiosSecure();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload) => {
+      const response = await axiosSecure.post(API_URL, payload);
+      return response.data.data;
+    },
+    onSuccess: (data) => {
+      // 🚀 SUCCESS TOAST
+      toast.success(
+        `Listing "${data.title || "New Property"}" created successfully!`
+      );
+
+      queryClient.invalidateQueries({ queryKey: ["agentListings"] });
+      onSuccessCallback(data);
+    },
+    onError: (error) => {
+      // ❌ ERROR TOAST
+      const errorMessage =
+        error.response?.data?.message ||
+        "Failed to create listing. Please check all fields and try again.";
+
+      toast.error(errorMessage);
+
+      onErrorCallback(error);
+    },
   });
-  const [photos, setPhotos] = useState([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errors, setErrors] = useState({});
+};
 
-  const propertyTypes = [
-    'Single Family Home',
-    'Condominium',
-    'Townhouse',
-    'Multi-Family',
-    'Land',
-    'Commercial'
-  ];
+// --------------------------- 2. Amenities Component ---------------------------
+const AmenitiesInput = ({ field, error }) => {
+  const [inputValue, setInputValue] = useState("");
+  const amenities = field.value || [];
+  const setAmenities = (newAmenities) => field.onChange(newAmenities);
 
-  const handleInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
-    
-    // Clear error when user starts typing
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: '' }));
-    }
-  };
-
-  const handlePhotoUpload = (e) => {
-    const files = Array.from(e.target.files);
-    const newPhotos = files.map(file => ({
-      id: Date.now() + Math.random(),
-      file,
-      preview: URL.createObjectURL(file)
-    }));
-    setPhotos(prev => [...prev, ...newPhotos]);
-  };
-
-  const removePhoto = (photoId) => {
-    setPhotos(prev => {
-      const photo = prev.find(p => p.id === photoId);
-      if (photo?.preview) {
-        URL.revokeObjectURL(photo.preview);
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      const newAmenity = inputValue.trim().replace(/,$/, "");
+      if (newAmenity && !amenities.includes(newAmenity)) {
+        setAmenities([...amenities, newAmenity]);
+        setInputValue("");
       }
-      return prev.filter(p => p.id !== photoId);
-    });
-  };
-
-  const validateForm = () => {
-    const newErrors = {};
-    
-    if (!formData.address?.trim()) newErrors.address = 'Address is required';
-    if (!formData.city?.trim()) newErrors.city = 'City is required';
-    if (!formData.state?.trim()) newErrors.state = 'State is required';
-    if (!formData.zipCode?.trim()) newErrors.zipCode = 'ZIP code is required';
-    if (!formData.price?.trim()) newErrors.price = 'Price is required';
-    if (!formData.propertyType) newErrors.propertyType = 'Property type is required';
-    if (!formData.bedrooms?.trim()) newErrors.bedrooms = 'Bedrooms is required';
-    if (!formData.bathrooms?.trim()) newErrors.bathrooms = 'Bathrooms is required';
-    
-    const price = parseFloat(formData.price);
-    if (isNaN(price) || price <= 0) {
-      newErrors.price = 'Please enter a valid price';
-    }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!validateForm()) return;
-    
-    setIsSubmitting(true);
-    
-    try {
-      const submissionData = {
-        ...formData,
-        photos: photos.map(p => p.file)
-      };
-      
-      await onSubmit?.(submissionData);
-    } catch (error) {
-      console.error('Error submitting listing:', error);
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
-  const handleClose = () => {
-    // Clean up photo previews
-    photos.forEach(photo => {
-      if (photo?.preview) {
-        URL.revokeObjectURL(photo.preview);
-      }
-    });
-    onClose?.();
+  const removeAmenity = (amenityToRemove) => {
+    setAmenities(amenities.filter((a) => a !== amenityToRemove));
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-modal p-4">
+    <div className="space-y-3">
+      <label className="block mb-1 text-sm font-medium text-text-primary">
+        Amenities (Type and press **Enter** or **Comma** to add)
+      </label>
+      <input
+        type="text"
+        value={inputValue}
+        onChange={(e) => setInputValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-all duration-200 ${
+          error ? "border-error" : "border-border focus:border-border-focus"
+        }`}
+        placeholder="e.g., EV Charging, Private Parking, etc."
+      />
+      {error && <p className="mt-1 text-xs text-error">{error.message}</p>}
+      <div className="flex flex-wrap gap-2 pt-2 min-h-[30px]">
+        {amenities.map((amenity, index) => (
+          <span
+            key={index}
+            className="inline-flex items-center px-3 py-1 text-sm font-medium transition-colors rounded-full cursor-pointer bg-primary-100 text-primary-800 hover:bg-red-100"
+            onClick={() => removeAmenity(amenity)}
+          >
+            {amenity}
+            <Icon name="X" size={12} className="ml-1" />
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// --------------------------- 3. Main Component ---------------------------
+const QuickListingForm = ({ onClose, onSubmit }) => {
+  // --- Configuration ---
+  const propertyTypes = [
+    "apartment",
+    "house",
+    "condo",
+    "townhouse",
+    "land",
+    "commercial",
+  ];
+  // Note: submissionError state is now primarily for debugging/local component display
+  // as the toast handles the primary notification.
+  const [submissionError, setSubmissionError] = useState(null);
+
+  // --- React Hook Form Setup ---
+  const {
+    handleSubmit,
+    register,
+    control,
+    formState: { errors },
+    reset,
+  } = useForm({
+    defaultValues: {
+      title: "",
+      address: "",
+      price: "",
+      propertyType: "",
+      bedrooms: "",
+      bathrooms: "",
+      squareFootage: "",
+      description: "",
+      lat: "",
+      lng: "",
+      mlsIntegration: true,
+      amenities: [],
+    },
+  });
+
+  // --- TanStack Query Setup ---
+  const { mutate, isPending } = useCreateListingMutation(
+    // onSuccess
+    (data) => {
+      onSubmit?.(data);
+      handleClose();
+    },
+    // onError
+    (error) => {
+      // The toast call is handled inside the hook now, we only need to set the local state here
+      console.error("API Submission Error:", error);
+      const errorMessage =
+        error.response?.data?.message ||
+        "Failed to create listing. Please check all fields and try again.";
+      setSubmissionError(errorMessage);
+    }
+  );
+
+  // --- Final Submission Handler ---
+  const onSubmitHandler = (formData) => {
+    setSubmissionError(null);
+
+    // 1. Construct the API Payload
+    const payload = {
+      title: formData.title,
+      price: Number(formData.price),
+      address: formData.address,
+      // Ensure positive numbers by using Math.max(1, value) if RHF validation fails somehow
+      bedrooms: Math.max(1, Number(formData.bedrooms)),
+      bathrooms: Math.max(1, Number(formData.bathrooms)),
+      sqft: Number(formData.squareFootage),
+      propertyType: formData.propertyType,
+      amenities: formData.amenities,
+      description: formData.description,
+      images: [],
+    };
+
+    // 2. Add coordinates if valid numbers are provided
+    if (formData.lat && formData.lng) {
+      payload.coordinates = {
+        lat: Number(formData.lat),
+        lng: Number(formData.lng),
+      };
+    }
+
+    // 3. Trigger the mutation
+    mutate(payload);
+  };
+
+  // --- Close Handler ---
+  const handleClose = useCallback(() => {
+    onClose?.();
+    reset();
+  }, [onClose, reset]);
+
+  // --------------------------- Render ---------------------------
+  return (
+    <div className="fixed inset-0 flex items-center justify-center p-4 bg-black bg-opacity-50 z-modal">
       <div className="bg-surface rounded-lg shadow-elevation-5 w-full max-w-4xl max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="p-6 border-b border-border">
@@ -125,239 +199,317 @@ const QuickListingForm = ({ onClose, onSubmit }) => {
             </h2>
             <button
               onClick={handleClose}
-              className="text-text-secondary hover:text-text-primary transition-colors duration-200"
+              className="transition-colors duration-200 text-text-secondary hover:text-text-primary"
             >
               <Icon name="X" size={24} />
             </button>
           </div>
         </div>
-        
-        {/* Form */}
+
+        {/* Form Scrollable Content */}
         <div className="overflow-y-auto max-h-[calc(90vh-140px)]">
-          <form onSubmit={handleSubmit} className="p-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Property Address */}
+          <form onSubmit={handleSubmit(onSubmitHandler)} className="p-6">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              {/* Section: Basic Info & Price */}
               <div className="lg:col-span-2">
-                <h3 className="text-lg font-medium text-text-primary mb-4">Property Address</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <h3 className="mb-4 text-lg font-medium text-text-primary">
+                  Listing Details
+                </h3>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                  {/* Title */}
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-text-primary mb-1">
-                      Street Address *
+                    <label className="block mb-1 text-sm font-medium text-text-primary">
+                      Property Title *
                     </label>
                     <input
                       type="text"
-                      name="address"
-                      value={formData.address}
-                      onChange={handleInputChange}
+                      {...register("title", { required: "Title is required" })}
                       className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-all duration-200 ${
-                        errors.address ? 'border-error' : 'border-border focus:border-border-focus'
+                        errors.title
+                          ? "border-error"
+                          : "border-border focus:border-border-focus"
                       }`}
-                      placeholder="123 Main Street"
+                      placeholder="Modern Tech Office Space"
                     />
-                    {errors.address && (
-                      <p className="text-error text-xs mt-1">{errors.address}</p>
+                    {errors.title && (
+                      <p className="mt-1 text-xs text-error">
+                        {errors.title.message}
+                      </p>
                     )}
                   </div>
-                  
+
+                  {/* Price */}
                   <div>
-                    <label className="block text-sm font-medium text-text-primary mb-1">
-                      City *
-                    </label>
-                    <input
-                      type="text"
-                      name="city"
-                      value={formData.city}
-                      onChange={handleInputChange}
-                      className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-all duration-200 ${
-                        errors.city ? 'border-error' : 'border-border focus:border-border-focus'
-                      }`}
-                      placeholder="San Francisco"
-                    />
-                    {errors.city && (
-                      <p className="text-error text-xs mt-1">{errors.city}</p>
-                    )}
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-text-primary mb-1">
-                      State *
-                    </label>
-                    <input
-                      type="text"
-                      name="state"
-                      value={formData.state}
-                      onChange={handleInputChange}
-                      className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-all duration-200 ${
-                        errors.state ? 'border-error' : 'border-border focus:border-border-focus'
-                      }`}
-                      placeholder="CA"
-                    />
-                    {errors.state && (
-                      <p className="text-error text-xs mt-1">{errors.state}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-              
-              {/* Property Details */}
-              <div className="lg:col-span-2">
-                <h3 className="text-lg font-medium text-text-primary mb-4">Property Details</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-text-primary mb-1">
+                    <label className="block mb-1 text-sm font-medium text-text-primary">
                       Price *
                     </label>
                     <input
                       type="number"
-                      name="price"
-                      value={formData.price}
-                      onChange={handleInputChange}
+                      {...register("price", {
+                        required: "Price is required",
+                        valueAsNumber: true,
+                        min: { value: 1, message: "Must be greater than 0" },
+                      })}
                       className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-all duration-200 ${
-                        errors.price ? 'border-error' : 'border-border focus:border-border-focus'
+                        errors.price
+                          ? "border-error"
+                          : "border-border focus:border-border-focus"
                       }`}
-                      placeholder="450000"
+                      placeholder="4800000"
                     />
                     {errors.price && (
-                      <p className="text-error text-xs mt-1">{errors.price}</p>
+                      <p className="mt-1 text-xs text-error">
+                        {errors.price.message}
+                      </p>
                     )}
                   </div>
-                  
+
+                  {/* Property Type */}
                   <div>
-                    <label className="block text-sm font-medium text-text-primary mb-1">
+                    <label className="block mb-1 text-sm font-medium text-text-primary">
                       Property Type *
                     </label>
                     <select
-                      name="propertyType"
-                      value={formData.propertyType}
-                      onChange={handleInputChange}
+                      {...register("propertyType", {
+                        required: "Property type is required",
+                      })}
                       className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-all duration-200 ${
-                        errors.propertyType ? 'border-error' : 'border-border focus:border-border-focus'
+                        errors.propertyType
+                          ? "border-error"
+                          : "border-border focus:border-border-focus"
                       }`}
                     >
                       <option value="">Select type</option>
-                      {propertyTypes.map(type => (
-                        <option key={type} value={type}>{type}</option>
+                      {propertyTypes.map((type) => (
+                        <option key={type} value={type}>
+                          {type.charAt(0).toUpperCase() + type.slice(1)}
+                        </option>
                       ))}
                     </select>
                     {errors.propertyType && (
-                      <p className="text-error text-xs mt-1">{errors.propertyType}</p>
+                      <p className="mt-1 text-xs text-error">
+                        {errors.propertyType.message}
+                      </p>
                     )}
                   </div>
-                  
+                </div>
+              </div>
+
+              {/* Section: Address */}
+              <div className="lg:col-span-2">
+                <h3 className="mb-4 text-lg font-medium text-text-primary">
+                  Property Address
+                </h3>
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="col-span-1">
+                    <label className="block mb-1 text-sm font-medium text-text-primary">
+                      Full Street Address *
+                    </label>
+                    <input
+                      type="text"
+                      {...register("address", {
+                        required: "Full address is required",
+                      })}
+                      className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-all duration-200 ${
+                        errors.address
+                          ? "border-error"
+                          : "border-border focus:border-border-focus"
+                      }`}
+                      placeholder="220 Innovation Way, Silicon Valley, CA 94025"
+                    />
+                    {errors.address && (
+                      <p className="mt-1 text-xs text-error">
+                        {errors.address.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Section: Metrics & Geo-Location */}
+              <div className="lg:col-span-2">
+                <h3 className="mb-4 text-lg font-medium text-text-primary">
+                  Metrics & Geo-Location
+                </h3>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                  {/* Bedrooms */}
                   <div>
-                    <label className="block text-sm font-medium text-text-primary mb-1">
+                    <label className="block mb-1 text-sm font-medium text-text-primary">
                       Bedrooms *
                     </label>
                     <input
                       type="number"
-                      name="bedrooms"
-                      value={formData.bedrooms}
-                      onChange={handleInputChange}
+                      {...register("bedrooms", {
+                        required: "Required",
+                        valueAsNumber: true,
+                        min: {
+                          value: 1,
+                          message: "Must have at least 1 bedroom",
+                        },
+                      })}
                       className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-all duration-200 ${
-                        errors.bedrooms ? 'border-error' : 'border-border focus:border-border-focus'
+                        errors.bedrooms
+                          ? "border-error"
+                          : "border-border focus:border-border-focus"
                       }`}
-                      placeholder="3"
-                      min="0"
+                      placeholder="2"
                     />
                     {errors.bedrooms && (
-                      <p className="text-error text-xs mt-1">{errors.bedrooms}</p>
+                      <p className="mt-1 text-xs text-error">
+                        {errors.bedrooms.message}
+                      </p>
                     )}
                   </div>
-                  
+
+                  {/* Bathrooms */}
                   <div>
-                    <label className="block text-sm font-medium text-text-primary mb-1">
+                    <label className="block mb-1 text-sm font-medium text-text-primary">
                       Bathrooms *
                     </label>
                     <input
                       type="number"
-                      name="bathrooms"
-                      value={formData.bathrooms}
-                      onChange={handleInputChange}
+                      {...register("bathrooms", {
+                        required: "Required",
+                        valueAsNumber: true,
+                        min: {
+                          value: 1,
+                          message: "Must have at least 1 bathroom",
+                        },
+                        step: 0.5,
+                      })}
                       className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-all duration-200 ${
-                        errors.bathrooms ? 'border-error' : 'border-border focus:border-border-focus'
+                        errors.bathrooms
+                          ? "border-error"
+                          : "border-border focus:border-border-focus"
                       }`}
                       placeholder="2"
-                      min="0"
-                      step="0.5"
                     />
                     {errors.bathrooms && (
-                      <p className="text-error text-xs mt-1">{errors.bathrooms}</p>
+                      <p className="mt-1 text-xs text-error">
+                        {errors.bathrooms.message}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Square Footage (sqft) */}
+                  <div>
+                    <label className="block mb-1 text-sm font-medium text-text-primary">
+                      Sq. Footage (sqft) *
+                    </label>
+                    <input
+                      type="number"
+                      {...register("squareFootage", {
+                        required: "Required",
+                        valueAsNumber: true,
+                        min: { value: 1, message: "Must be greater than 0" },
+                      })}
+                      className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-all duration-200 ${
+                        errors.squareFootage
+                          ? "border-error"
+                          : "border-border focus:border-border-focus"
+                      }`}
+                      placeholder="6200"
+                    />
+                    {errors.squareFootage && (
+                      <p className="mt-1 text-xs text-error">
+                        {errors.squareFootage.message}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Latitude */}
+                  <div>
+                    <label className="block mb-1 text-sm font-medium text-text-primary">
+                      Latitude
+                    </label>
+                    <input
+                      type="number"
+                      {...register("lat", {
+                        valueAsNumber: true,
+                        min: -90,
+                        max: 90,
+                      })}
+                      className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-all duration-200 ${
+                        errors.lat
+                          ? "border-error"
+                          : "border-border focus:border-border-focus"
+                      }`}
+                      placeholder="37.4511"
+                      step="any"
+                    />
+                    {errors.lat && (
+                      <p className="mt-1 text-xs text-error">
+                        {errors.lat.message}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Longitude */}
+                  <div>
+                    <label className="block mb-1 text-sm font-medium text-text-primary">
+                      Longitude
+                    </label>
+                    <input
+                      type="number"
+                      {...register("lng", {
+                        valueAsNumber: true,
+                        min: -180,
+                        max: 180,
+                      })}
+                      className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-all duration-200 ${
+                        errors.lng
+                          ? "border-error"
+                          : "border-border focus:border-border-focus"
+                      }`}
+                      placeholder="-122.1817"
+                      step="any"
+                    />
+                    {errors.lng && (
+                      <p className="mt-1 text-xs text-error">
+                        {errors.lng.message}
+                      </p>
                     )}
                   </div>
                 </div>
               </div>
-              
-              {/* Photo Upload */}
+
+              {/* Section: Amenities (Using Controller) */}
               <div className="lg:col-span-2">
-                <h3 className="text-lg font-medium text-text-primary mb-4">Photos</h3>
-                <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={handlePhotoUpload}
-                    className="hidden"
-                    id="photo-upload"
-                  />
-                  <label
-                    htmlFor="photo-upload"
-                    className="cursor-pointer inline-flex flex-col items-center space-y-2"
-                  >
-                    <Icon name="Upload" size={32} className="text-secondary-300" />
-                    <span className="text-text-secondary">Click to upload photos</span>
-                    <span className="text-xs text-text-secondary">PNG, JPG up to 10MB each</span>
-                  </label>
-                </div>
-                
-                {photos.length > 0 && (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-                    {photos.map(photo => (
-                      <div key={photo.id} className="relative">
-                        <img
-                          src={photo.preview}
-                          alt="Preview"
-                          className="w-full h-24 object-cover rounded-md"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removePhoto(photo.id)}
-                          className="absolute -top-2 -right-2 bg-error text-white rounded-full p-1 hover:bg-error-500 transition-colors duration-200"
-                        >
-                          <Icon name="X" size={12} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <Controller
+                  name="amenities"
+                  control={control}
+                  render={({ field, fieldState: { error } }) => (
+                    <AmenitiesInput field={field} error={error} />
+                  )}
+                />
               </div>
-              
+
               {/* Description */}
               <div className="lg:col-span-2">
-                <label className="block text-sm font-medium text-text-primary mb-1">
+                <label className="block mb-1 text-sm font-medium text-text-primary">
                   Description
                 </label>
                 <textarea
-                  name="description"
-                  value={formData.description}
-                  onChange={handleInputChange}
+                  {...register("description")}
                   rows={4}
-                  className="w-full px-3 py-2 border border-border rounded-md focus:border-border-focus focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-all duration-200"
+                  className="w-full px-3 py-2 transition-all duration-200 border rounded-md border-border focus:border-border-focus focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
                   placeholder="Describe the property features, amenities, and highlights..."
                 />
               </div>
-              
+
               {/* MLS Integration */}
               <div className="lg:col-span-2">
                 <div className="flex items-center space-x-2">
                   <input
                     type="checkbox"
-                    name="mlsIntegration"
-                    checked={formData.mlsIntegration}
-                    onChange={handleInputChange}
+                    {...register("mlsIntegration")}
                     className="rounded border-border text-primary focus:ring-primary-500"
                     id="mls-integration"
                   />
-                  <label htmlFor="mls-integration" className="text-sm text-text-primary">
+                  <label
+                    htmlFor="mls-integration"
+                    className="text-sm text-text-primary"
+                  >
                     Sync with MLS
                   </label>
                 </div>
@@ -365,23 +517,41 @@ const QuickListingForm = ({ onClose, onSubmit }) => {
             </div>
           </form>
         </div>
-        
+
         {/* Footer */}
-        <div className="p-6 border-t border-border">
-          <div className="flex justify-end space-x-4">
+        <div className="p-6 pb-5 border-t border-border">
+          {submissionError && (
+            <p className="mb-4 text-sm text-right text-error">
+              **Error:** {submissionError}
+            </p>
+          )}
+          <div className="flex justify-end mb-4 space-x-4">
             <button
               type="button"
               onClick={handleClose}
-              className="px-4 py-2 text-text-secondary hover:text-text-primary transition-colors duration-200"
+              className="px-4 py-2 transition-colors duration-200 text-text-secondary hover:text-text-primary"
+              disabled={isPending}
             >
               Cancel
             </button>
             <button
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-              className="bg-primary text-white px-6 py-2 rounded-md font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 ease-out micro-interaction"
+              type="submit"
+              onClick={handleSubmit(onSubmitHandler)}
+              disabled={isPending}
+              className="px-6 py-2 font-medium text-white transition-all duration-200 ease-out rounded-md bg-primary hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed micro-interaction"
             >
-              {isSubmitting ? 'Creating...' : 'Create Listing'}
+              {isPending ? (
+                <>
+                  <Icon
+                    name="Loader"
+                    size={16}
+                    className="inline mr-2 animate-spin"
+                  />
+                  Creating...
+                </>
+              ) : (
+                "Create Listing"
+              )}
             </button>
           </div>
         </div>

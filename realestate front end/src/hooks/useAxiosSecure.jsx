@@ -1,6 +1,7 @@
 import axios from "axios";
 import useAuthContext from "./useAuthContext";
 import { useNavigate } from "react-router-dom";
+import logout from "helpers/Logout";
 
 const axiosSecure = axios.create({
   baseURL: import.meta.env.VITE_API,
@@ -9,7 +10,7 @@ const axiosSecure = axios.create({
 
 const useAxiosSecure = () => {
   const navigate = useNavigate();
-  const { token, setToken, setUser, logut } = useAuthContext();
+  const { token, setToken, setUser, setLoading } = useAuthContext();
 
   axiosSecure.interceptors.request.use((config) => {
     if (token) {
@@ -31,10 +32,9 @@ const useAxiosSecure = () => {
           setToken(res.data.accessToken);
           setUser(res.data.user);
           original.headers.Authorization = `Bearer ${res.data.accessToken}`;
-
           return axiosSecure(original);
         } catch (error) {
-          await logut();
+          await logout(setLoading, setUser, setToken);
           navigate("/login");
         }
       }

@@ -58,9 +58,7 @@ const AgentDashboard = () => {
   };
 
   const handleListingSubmit = (listingData) => {
-    console.log("New listing data:", listingData);
     setShowQuickListingForm(false);
-    // Implement listing creation logic
   };
 
   if (isLoading) {

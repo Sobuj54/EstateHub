@@ -14,6 +14,7 @@ import ForgotPassword from "pages/auth/FogotPassword";
 import ResetPassword from "pages/auth/ResetPassword";
 import Unauthorized from "pages/unauthorized/Unauthorized";
 import ProtectedRoute from "components/ProtectedRoute";
+import AllAgents from "pages/all-agents/AllAgents";
 
 const AdminRoutes = lazy(() => import("AdminRoutes"));
 const UserProfileSettings = lazy(() => import("pages/user-profile-settings"));
@@ -36,6 +37,7 @@ const Routes = () => {
             <Route path="/reset-password/:token" element={<ResetPassword />} />
             <Route path="/property-listings" element={<PropertyListings />} />
             <Route path="/property-details/:id" element={<PropertyDetails />} />
+            <Route path="/all-agents" element={<AllAgents />} />
             <Route
               path="/agent-dashboard/*"
               element={

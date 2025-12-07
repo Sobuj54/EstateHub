@@ -1,13 +1,15 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query"; // <-- Added useQueryClient
+// src/components/admin/ManageAgents.jsx
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import ConfirmModal from "components/ui/ConfirmModal";
+import Pagination from "components/ui/Pagination";
 import useAgents from "hooks/useAgents";
 import useAxiosSecure from "hooks/useAxiosSecure";
 import { useMemo, useState } from "react";
-import { toast } from "react-toastify"; // Ensure toast is imported
+import { toast } from "react-toastify";
 
 const ManageAgents = () => {
   const api = useAxiosSecure();
-  const queryClient = useQueryClient(); // <-- Correctly initialized
+  const queryClient = useQueryClient();
 
   // State for pagination and search
   const [pageNo, setPageNo] = useState(1);
@@ -25,21 +27,16 @@ const ManageAgents = () => {
     limit,
     query
   );
-
-  // Note: Assuming 'users' key holds the agent data, as per your structure
   const agents = data?.users || [];
   const totalPages = data?.totalPages || 1;
   const totalCount = data?.totalCount || 0;
 
   // --- OPTIMISTIC UPDATE HELPER ---
   const optimisticUpdate = async (id, fields) => {
-    // 1. Cancel any current fetching for this key
     await queryClient.cancelQueries({ queryKey });
 
-    // 2. Snapshot the previous data
     const previousAgentsData = queryClient.getQueryData(queryKey);
 
-    // 3. Optimistically update the cache
     queryClient.setQueryData(queryKey, (old) => {
       if (!old) return old;
       return {
@@ -48,28 +45,22 @@ const ManageAgents = () => {
       };
     });
 
-    return { previousAgentsData }; // Return snapshot for error rollback
+    return { previousAgentsData };
   };
 
   const handleMutationError = (context) => {
     toast.error("An error occurred. Rolling back changes.");
-    // Rollback to the snapshot
     queryClient.setQueryData(queryKey, context.previousAgentsData);
   };
 
-  // --- MUTATION FUNCTIONS ---
-
   // 1. Toggle Verification Status
   const toggleVerificationMutation = useMutation({
-    // MutationFn accepts an object: { id, isVerified }
     mutationFn: ({ id, isVerified }) =>
-      // API call now includes the new state in the body
       api.patch(`/users/verify/${id}`, { isVerified }),
 
     onMutate: ({ id, isVerified }) => optimisticUpdate(id, { isVerified }),
     onError: (err, variables, context) => handleMutationError(context),
-    // Invalidate the query to refetch/sync with server after success or failure
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["agents"] }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey }),
     onSuccess: () => toast.success("Verification status updated successfully."),
   });
 
@@ -80,7 +71,7 @@ const ManageAgents = () => {
 
     onMutate: ({ id, newRole }) => optimisticUpdate(id, { role: newRole }),
     onError: (err, variables, context) => handleMutationError(context),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["agents"] }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey }),
     onSuccess: (data, { newRole }) => {
       toast.success(`Role updated to ${newRole.toUpperCase()}.`);
     },
@@ -90,7 +81,6 @@ const ManageAgents = () => {
   const deleteMutation = useMutation({
     mutationFn: (id) => api.delete(`/users/${id}`),
 
-    // Optional: Add optimistic delete for a smoother UI experience
     onMutate: async (idToDelete) => {
       await queryClient.cancelQueries({ queryKey });
       const previousAgentsData = queryClient.getQueryData(queryKey);
@@ -111,11 +101,9 @@ const ManageAgents = () => {
     },
     onError: (err, variables, context) => {
       toast.error("Failed to delete agent. Rolling back.");
-      // Rollback for delete
       queryClient.setQueryData(queryKey, context.previousAgentsData);
     },
-    // Invalidate the query to refetch the list after deletion (important for accurate pagination/counts)
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["agents"] }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey }),
   });
 
   const handleDeleteConfirm = () => {
@@ -142,10 +130,9 @@ const ManageAgents = () => {
           return (
             <button
               onClick={() =>
-                // Pass the ID and the new status (the opposite of the current status)
                 toggleVerificationMutation.mutate({
                   id: agent._id,
-                  isVerified: !isVerified, // Toggle the status
+                  isVerified: !isVerified,
                 })
               }
               className={`px-3 py-1 text-sm rounded transition-colors shadow-sm ${
@@ -174,7 +161,6 @@ const ManageAgents = () => {
             changeRoleMutation.isPending &&
             changeRoleMutation.variables?.id === agent._id;
 
-          // Note: Assuming "super_admin" is excluded from this list for security
           const roles = ["member", "agent", "admin"];
 
           const handleSelectChange = (e) => {
@@ -246,15 +232,7 @@ const ManageAgents = () => {
         },
       },
     ],
-    // Dependencies now include query state for accurate cache targeting
-    [
-      toggleVerificationMutation,
-      changeRoleMutation,
-      deleteMutation,
-      pageNo,
-      limit,
-      query,
-    ]
+    [toggleVerificationMutation, changeRoleMutation, deleteMutation]
   );
 
   // Custom Cell Renderer function
@@ -266,7 +244,6 @@ const ManageAgents = () => {
   };
 
   // --- RENDER LOGIC ---
-
   if (isLoading && !isPreviousData) {
     return (
       <div className="p-6 space-y-4 rounded-xl bg-gray-50">
@@ -398,31 +375,12 @@ const ManageAgents = () => {
       {/* Pagination Controls */}
       <div className="flex items-center justify-between pt-4">
         <span className="text-sm font-medium text-gray-600">
-          Showing {agents.length} of {agents.length} total agents.
+          Showing {agents.length} of {totalCount} total agents.
         </span>
-        <div className="flex space-x-3">
-          <button
-            onClick={() => setPageNo((old) => Math.max(old - 1, 1))}
-            disabled={pageNo === 1 || isFetching}
-            className="px-4 py-2 text-sm font-medium text-gray-700 transition bg-white border border-gray-300 rounded-lg shadow-sm disabled:opacity-50 hover:bg-gray-100"
-          >
-            &larr; Previous (Page {pageNo > 1 ? pageNo - 1 : 1})
-          </button>
-          <button
-            onClick={() => {
-              if (pageNo < totalPages) {
-                setPageNo((old) => old + 1);
-              }
-            }}
-            disabled={pageNo >= totalPages || isFetching}
-            className="px-4 py-2 text-sm font-medium text-white transition bg-blue-600 rounded-lg shadow-md disabled:opacity-50 hover:bg-blue-700"
-          >
-            Next (Page {pageNo < totalPages ? pageNo + 1 : totalPages}) &rarr;
-          </button>
-        </div>
+
+        <Pagination page={pageNo} totalPages={totalPages} setPage={setPageNo} />
       </div>
 
-      {/* Delete Confirmation Modal */}
       <ConfirmModal
         open={!!toDelete}
         title="Delete Agent Confirmation"
