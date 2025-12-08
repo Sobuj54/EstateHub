@@ -105,6 +105,21 @@ const resetUserPassword = async (
   user.save();
 };
 
+const changeUserPassword = async (
+  oldPassword: string,
+  newPassword: string,
+  id: string
+) => {
+  const user = await User.findById(id).select('+password');
+  if (!user) throw new ApiError(404, 'No user found.');
+
+  const passwordCorrect = await user.isPasswordCorrect(oldPassword);
+  if (!passwordCorrect) throw new ApiError(403, 'Forbidden user');
+
+  user.password = newPassword;
+  await user.save();
+};
+
 export {
   register,
   login,
@@ -112,4 +127,5 @@ export {
   refreshAccessToken,
   resetUserPassword,
   forgotPasswordMailService,
+  changeUserPassword,
 };

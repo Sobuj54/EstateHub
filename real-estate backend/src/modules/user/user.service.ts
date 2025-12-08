@@ -308,6 +308,25 @@ const deleteUser = async (id: string) => {
   }
 };
 
+const updateUserProfile = async (
+  profile: Partial<IUser>,
+  id: string
+): Promise<IUser> => {
+  const updatedUser = await User.findByIdAndUpdate(
+    id,
+    {
+      $set: {
+        ...profile,
+      },
+    },
+    { new: true }
+  )
+    .select('-refreshToken')
+    .lean();
+  if (!updatedUser) throw new ApiError(400, 'User update failed.');
+  return updatedUser;
+};
+
 export {
   checkStatus,
   uploadUserAvatar,
@@ -318,4 +337,5 @@ export {
   updateRole,
   verifyAUser,
   deleteUser,
+  updateUserProfile,
 };

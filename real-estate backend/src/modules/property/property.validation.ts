@@ -41,15 +41,10 @@ export const PropertyZodSchema = z.object({
     .min(20, 'Description must be at least 20 characters long'),
 });
 
-// --- Helper Types ---
-
-// Infer the TypeScript type from the Zod schema for strong typing throughout your application
 export type IPropertyZod = z.infer<typeof PropertyZodSchema>;
 
 export const verifyPropertyZodSchema = z.object({
-  id: z
-    .string()
-    .refine((id) => mongoose.Types.ObjectId.isValid(id), {
-      error: 'Valid property id required.',
-    }),
+  id: z.string().refine((id) => mongoose.Types.ObjectId.isValid(id), {
+    error: 'Valid property id required.',
+  }),
 });

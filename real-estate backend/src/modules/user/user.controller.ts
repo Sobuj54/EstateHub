@@ -9,6 +9,7 @@ import {
   getAgents,
   getMembers,
   updateRole,
+  updateUserProfile,
   uploadUserAvatar,
   verifiedAgents,
   verifyAUser,
@@ -86,6 +87,15 @@ const deleteAUser = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, null, 'Deleted User Successfully.'));
 });
 
+const updateProfile = asyncHandler(async (req, res) => {
+  const { ...profileInfo } = req.body;
+  const { _id } = req.user as UserDocument;
+  const result = await updateUserProfile(profileInfo, _id as string);
+  res
+    .status(200)
+    .json(new ApiResponse(200, result, 'Profile updated successfully.'));
+});
+
 export {
   userStatus,
   uploadAvatar,
@@ -96,4 +106,5 @@ export {
   changeRole,
   verifyUser,
   deleteAUser,
+  updateProfile,
 };

@@ -47,3 +47,15 @@ export const resetPasswordZodSchema = z.object({
 export const forgotPasswordZodSchema = z.object({
   email: z.email(),
 });
+
+export const changePasswordZodSchema = z.object({
+  oldPassword: z.string(),
+  newPassword: z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .max(128, 'Password too long')
+    .regex(
+      passwordRegex,
+      'Password must include at least one uppercase letter, one number and one special character'
+    ),
+});

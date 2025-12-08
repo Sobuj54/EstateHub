@@ -1,7 +1,9 @@
 import ApiResponse from '../../utils/ApiResponse';
 import { asyncHandler } from '../../utils/asyncHandler';
+import { UserDocument } from '../user/user.interface';
 import { cookieOptions } from './auth.constants';
 import {
+  changeUserPassword,
   forgotPasswordMailService,
   login,
   logout,
@@ -83,6 +85,18 @@ const resetPassword = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, null, 'Password reset successfull.'));
 });
 
+const changePassword = asyncHandler(async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  await changeUserPassword(
+    oldPassword,
+    newPassword,
+    (req.user as UserDocument)._id as string
+  );
+  res
+    .status(200)
+    .json(new ApiResponse(200, null, 'password changed successfull.'));
+});
+
 export {
   registerUser,
   loginUser,
@@ -90,4 +104,5 @@ export {
   refreshToken,
   resetPassword,
   forgotPassword,
+  changePassword,
 };

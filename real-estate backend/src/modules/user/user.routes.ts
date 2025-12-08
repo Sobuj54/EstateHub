@@ -6,11 +6,16 @@ import {
   getAllMembers,
   getDashobardSummary,
   getVerifiedAgents,
+  updateProfile,
   userStatus,
   verifyUser,
 } from './user.controller';
 import { validateZodRequest } from '../../middlewares/zodValidationMiddleware';
-import { deleteUserZodSchema, refreshTokenZodSchema } from './user.validation';
+import {
+  deleteUserZodSchema,
+  refreshTokenZodSchema,
+  updateUserProfileSchema,
+} from './user.validation';
 import { verifyJWT } from '../auth/auth.middleware';
 import { verifyAuthorization } from '../../middlewares/verifyAuthorization';
 import { USER_ROLE } from '../../enums/user';
@@ -62,6 +67,10 @@ router
     verifyAuthorization([USER_ROLE.ADMIN, USER_ROLE.SUPER_ADMIN]),
     changeRole
   );
+
+router
+  .route('/profile')
+  .patch(validateZodRequest(updateUserProfileSchema), verifyJWT, updateProfile);
 
 router.route('/agents/verified').get(getVerifiedAgents);
 router

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { validateZodRequest } from '../../middlewares/zodValidationMiddleware';
 import {
+  changePasswordZodSchema,
   forgotPasswordZodSchema,
   loginZodSchema,
   refreshTokenZodSchema,
@@ -8,6 +9,7 @@ import {
   resetPasswordZodSchema,
 } from './auth.validation';
 import {
+  changePassword,
   forgotPassword,
   loginUser,
   logoutUser,
@@ -34,5 +36,12 @@ router
 router
   .route('/reset-password')
   .post(validateZodRequest(resetPasswordZodSchema), resetPassword);
+router
+  .route('/change-password')
+  .patch(
+    validateZodRequest(changePasswordZodSchema),
+    verifyJWT,
+    changePassword
+  );
 
 export const authRoutes = router;
