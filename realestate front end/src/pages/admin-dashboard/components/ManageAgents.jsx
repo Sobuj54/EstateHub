@@ -4,29 +4,30 @@ import ConfirmModal from "components/ui/ConfirmModal";
 import Pagination from "components/ui/Pagination";
 import useAgents from "hooks/useAgents";
 import useAxiosSecure from "hooks/useAxiosSecure";
-import { useMemo, useState } from "react";
+import useDebounce from "hooks/useDebounce";
+import { useMemo, useState, useEffect } from "react";
 import { toast } from "react-toastify";
 
 const ManageAgents = () => {
   const api = useAxiosSecure();
   const queryClient = useQueryClient();
 
-  // State for pagination and search
+  // State for pagination and search input value
   const [pageNo, setPageNo] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [query, setQuery] = useState("");
+  // Immediate input value, debounced into `query`
+  const [inputValue, setInputValue] = useState("");
   const [toDelete, setToDelete] = useState(null);
 
-  // --- QUERY KEY DEFINITION ---
-  // This key MUST match the key used in your useAgents hook for optimistic updates to work.
+  const query = useDebounce(inputValue, 600); // debounce delay
+
+  // The key must match the one used by useAgents (for optimistic updates)
   const queryKey = ["agents", { pageNo, limit, query }];
 
-  // Fetch data using the custom hook
-  const { data, isLoading, isFetching, isPreviousData, isError } = useAgents(
-    pageNo,
-    limit,
-    query
-  );
+  // useAgents should accept (pageNo, limit, query) and return query data + refetch
+  const { data, isLoading, isFetching, isPreviousData, isError, refetch } =
+    useAgents(pageNo, limit, query);
+
   const agents = data?.users || [];
   const totalPages = data?.totalPages || 1;
   const totalCount = data?.totalCount || 0;
@@ -50,7 +51,9 @@ const ManageAgents = () => {
 
   const handleMutationError = (context) => {
     toast.error("An error occurred. Rolling back changes.");
-    queryClient.setQueryData(queryKey, context.previousAgentsData);
+    if (context?.previousAgentsData) {
+      queryClient.setQueryData(queryKey, context.previousAgentsData);
+    }
   };
 
   // 1. Toggle Verification Status
@@ -64,7 +67,7 @@ const ManageAgents = () => {
     onSuccess: () => toast.success("Verification status updated successfully."),
   });
 
-  // 2. Change Role (Handles 'member', 'agent', 'admin')
+  // 2. Change Role
   const changeRoleMutation = useMutation({
     mutationFn: ({ id, newRole }) =>
       api.patch(`/users/change-role/${id}`, { role: newRole }),
@@ -95,14 +98,29 @@ const ManageAgents = () => {
       return { previousAgentsData };
     },
 
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Agent deleted successfully.");
       setToDelete(null);
+
+      // If deleting left current page empty and there are previous pages, move back one page
+      // Note: agents here is the **pre-delete** list; after delete the query will be refetched.
+      if (agents.length === 1 && pageNo > 1) {
+        setPageNo((p) => p - 1);
+      }
+
+      // Ensure fresh data is fetched for the new page
+      await queryClient.invalidateQueries({ queryKey });
+      // Also call refetch from hook if available
+      if (typeof refetch === "function") refetch();
     },
+
     onError: (err, variables, context) => {
       toast.error("Failed to delete agent. Rolling back.");
-      queryClient.setQueryData(queryKey, context.previousAgentsData);
+      if (context?.previousAgentsData) {
+        queryClient.setQueryData(queryKey, context.previousAgentsData);
+      }
     },
+
     onSettled: () => queryClient.invalidateQueries({ queryKey }),
   });
 
@@ -112,12 +130,11 @@ const ManageAgents = () => {
     }
   };
 
-  // --- COLUMN DEFINITIONS ---
+  // --- COLUMNS (same as before) ---
   const columns = useMemo(
     () => [
       { accessorKey: "name", header: "Name" },
       { accessorKey: "email", header: "Email" },
-      // Verification Status Column
       {
         accessorKey: "isVerified",
         header: "Verified",
@@ -151,7 +168,6 @@ const ManageAgents = () => {
           );
         },
       },
-      // Role Change Column
       {
         accessorKey: "role",
         header: "Role",
@@ -170,17 +186,12 @@ const ManageAgents = () => {
             }
           };
 
-          let roleColorClass;
-          if (currentRole === "admin") {
-            roleColorClass =
-              "bg-red-100 text-red-700 border-red-300 hover:bg-red-200";
-          } else if (currentRole === "agent") {
-            roleColorClass =
-              "bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-200";
-          } else {
-            roleColorClass =
-              "bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200";
-          }
+          let roleColorClass =
+            currentRole === "admin"
+              ? "bg-red-100 text-red-700 border-red-300 hover:bg-red-200"
+              : currentRole === "agent"
+              ? "bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-200"
+              : "bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200";
 
           return (
             <div className="relative">
@@ -215,7 +226,6 @@ const ManageAgents = () => {
           );
         },
       },
-      // Actions Column (Delete)
       {
         id: "actions",
         header: "",
@@ -235,15 +245,12 @@ const ManageAgents = () => {
     [toggleVerificationMutation, changeRoleMutation, deleteMutation]
   );
 
-  // Custom Cell Renderer function
   const renderCell = (agent, column) => {
-    if (column.cell) {
-      return column.cell({ agent });
-    }
+    if (column.cell) return column.cell({ agent });
     return agent[column.accessorKey];
   };
 
-  // --- RENDER LOGIC ---
+  // If the hook exposes isPreviousData, you used it already for skeletons.
   if (isLoading && !isPreviousData) {
     return (
       <div className="p-6 space-y-4 rounded-xl bg-gray-50">
@@ -275,16 +282,36 @@ const ManageAgents = () => {
             </span>
           )}
         </h1>
-        <div className="flex flex-col w-full gap-2 sm:w-80">
-          <input
-            value={query}
+
+        <div className="flex items-center gap-3">
+          <div className="flex flex-col w-full gap-2 sm:w-80">
+            <input
+              value={inputValue}
+              onChange={(e) => {
+                setInputValue(e.target.value);
+                setPageNo(1);
+              }}
+              placeholder="Search by name or email..."
+              className="w-full px-4 py-2 transition border border-gray-300 shadow-sm rounded-xl focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+
+          {/* Per-page selector */}
+          <select
+            value={limit}
             onChange={(e) => {
-              setQuery(e.target.value);
-              setPageNo(1); // Reset to page 1 on search
+              setLimit(Number(e.target.value));
+              setPageNo(1); // reset page when changing limit
             }}
-            placeholder="Search by name or email..."
-            className="w-full px-4 py-2 transition border border-gray-300 shadow-sm rounded-xl focus:ring-blue-500 focus:border-blue-500"
-          />
+            className="px-5 py-2 text-sm border rounded-lg"
+            aria-label="Rows per page"
+          >
+            {[5, 10, 20, 50].map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -341,7 +368,6 @@ const ManageAgents = () => {
                 <div className="font-bold text-gray-900 truncate">
                   {agent.name}
                 </div>
-                {/* Actions column on mobile */}
                 {renderCell(
                   agent,
                   columns.find((c) => c.id === "actions")
@@ -351,12 +377,10 @@ const ManageAgents = () => {
                 {agent.email}
               </div>
               <div className="flex flex-wrap gap-2">
-                {/* Role Change */}
                 {renderCell(
                   agent,
                   columns.find((c) => c.accessorKey === "role")
                 )}
-                {/* Verification */}
                 {renderCell(
                   agent,
                   columns.find((c) => c.accessorKey === "isVerified")

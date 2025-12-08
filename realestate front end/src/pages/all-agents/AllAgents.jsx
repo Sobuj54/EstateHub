@@ -38,7 +38,7 @@ const fetchAgents = async ({ queryKey }) => {
 
 const AllAgents = () => {
   const [pageNo, setPageNo] = useState(1);
-  const [limit, setLimit] = useState(5);
+  const [limit, setLimit] = useState(6);
   const [agents, setAgents] = useState([]);
   const [totalPagesLocal, setTotalPagesLocal] = useState(1);
   const [totalCountLocal, setTotalCountLocal] = useState(0);
@@ -117,7 +117,7 @@ const AllAgents = () => {
               className="px-5 py-2 text-sm border rounded-lg focus:ring-0"
               aria-label="Agents per page"
             >
-              {[5, 10, 15, 20].map((n) => (
+              {[6, 12, 18, 24].map((n) => (
                 <option key={n} value={n}>
                   {n}
                 </option>

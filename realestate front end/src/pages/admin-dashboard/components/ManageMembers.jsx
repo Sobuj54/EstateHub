@@ -1,10 +1,11 @@
 // src/pages/admin-dashboard/components/ManageMembers.jsx
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { toast } from "react-toastify";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import useAxiosSecure from "hooks/useAxiosSecure";
 import ConfirmModal from "components/ui/ConfirmModal";
 import Pagination from "components/ui/Pagination";
+import useDebounce from "hooks/useDebounce";
 
 const roles = [
   { value: "member", label: "Member" },
@@ -29,20 +30,28 @@ const ManageMembers = () => {
   const api = useAxiosSecure();
   const queryClient = useQueryClient();
 
-  // Pagination & search
+  // -----------------------
+  // Local state & debounce
+  // -----------------------
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [q, setQ] = useState("");
-
-  // UI state
+  const debouncedQ = useDebounce(q, 600);
   const [selectedDelete, setSelectedDelete] = useState(null);
 
-  // ------- Fetch members with pagination & search -------
-  const { data, isLoading, isError, isFetching } = useQuery({
-    queryKey: ["members", page, limit, q],
+  // -----------------------
+  // Query key helper
+  // -----------------------
+  const queryKey = ["members", page, limit, debouncedQ];
+
+  // -----------------------
+  // Query: fetch members
+  // -----------------------
+  const { data, isLoading, isError, isFetching, refetch } = useQuery({
+    queryKey,
     queryFn: async () => {
       const res = await api.get("/users/members", {
-        params: { page, limit, q },
+        params: { pageNo: page, limit, query: debouncedQ },
       });
       const users = res?.data?.data?.users ?? [];
       const totalPages = res?.data?.data?.totalPages ?? 1;
@@ -66,113 +75,201 @@ const ManageMembers = () => {
   const currentPage = data?.currentPage ?? page;
   const totalCount = data?.totalCount ?? 0;
 
-  // Helper: optimistic update
+  // -----------------------
+  // Helpers for optimistic updates
+  // -----------------------
   const optimisticUpdate = async ({ id, patch }) => {
-    await queryClient.cancelQueries({ queryKey: ["members", page, limit, q] });
-    const previous = queryClient.getQueryData({
-      queryKey: ["members", page, limit, q],
+    await queryClient.cancelQueries({ queryKey });
+    const previous = queryClient.getQueryData({ queryKey });
+    queryClient.setQueryData({ queryKey }, (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        members: old.members.map((m) => (m.id === id ? { ...m, ...patch } : m)),
+      };
     });
-    queryClient.setQueryData(
-      { queryKey: ["members", page, limit, q] },
-      (old) => {
-        if (!old) return old;
-        return {
-          ...old,
-          members: old.members.map((m) =>
-            m.id === id ? { ...m, ...patch } : m
-          ),
-        };
-      }
-    );
     return { previous };
   };
 
   const handleErrorRollback = (context) => {
     if (context?.previous) {
-      queryClient.setQueryData(
-        { queryKey: ["members", page, limit, q] },
-        context.previous
-      );
+      queryClient.setQueryData({ queryKey }, context.previous);
     }
     toast.error("Operation failed — rolled back.");
   };
 
-  // ------- Role mutation -------
+  // -----------------------
+  // Mutations (top-level hooks)
+  // -----------------------
   const roleMutation = useMutation({
     mutationFn: ({ id, role }) =>
       api.patch(`/users/change-role/${id}`, { role }),
     onMutate: (vars) =>
       optimisticUpdate({ id: vars.id, patch: { role: vars.role } }),
     onError: (err, vars, context) => handleErrorRollback(context),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["members"] }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey }),
     onSuccess: () => toast.success("Role updated"),
   });
 
-  const handleRoleChange = (id, nextRole) => {
-    roleMutation.mutate({ id, role: nextRole });
-  };
-
-  // ------- Verify mutation -------
   const verifyMutation = useMutation({
     mutationFn: ({ id, isVerified }) =>
       api.patch(`/users/verify/${id}`, { isVerified }),
     onMutate: (vars) =>
       optimisticUpdate({ id: vars.id, patch: { isVerified: vars.isVerified } }),
     onError: (err, vars, context) => handleErrorRollback(context),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["members"] }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey }),
     onSuccess: () => toast.success("Verification status updated"),
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => api.delete(`/users/${id}`),
+    onMutate: async (idToDelete) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData({ queryKey });
+      queryClient.setQueryData({ queryKey }, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          members: old.members.filter((m) => m.id !== idToDelete),
+        };
+      });
+      return { previous };
+    },
+    onError: (err, variables, context) => handleErrorRollback(context),
+    onSettled: () => queryClient.invalidateQueries({ queryKey }),
+    onSuccess: async () => {
+      toast.success("Member deleted");
+      setSelectedDelete(null);
+      // If deletion left current page empty and there are earlier pages, go back one page
+      if (members.length === 1 && page > 1) {
+        setPage((p) => p - 1);
+      }
+      await refetch();
+      await queryClient.invalidateQueries({ queryKey });
+    },
+  });
+
+  // -----------------------
+  // Column definitions (HOOK — must be at top-level)
+  // -----------------------
+  const columns = useMemo(
+    () => [
+      { accessorKey: "name", header: "Name" },
+      { accessorKey: "email", header: "Email" },
+      {
+        accessorKey: "role",
+        header: "Role",
+        cell: ({ member }) => {
+          const currentRole = member.role;
+          const isUpdating =
+            roleMutation.isPending && roleMutation.variables?.id === member.id;
+          const handleChange = (e) => {
+            const newRole = e.target.value;
+            if (newRole !== currentRole)
+              roleMutation.mutate({ id: member.id, role: newRole });
+          };
+          return (
+            <select
+              value={currentRole}
+              onChange={handleChange}
+              disabled={isUpdating}
+              className="px-2 py-1 border rounded"
+            >
+              {roles.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+          );
+        },
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: ({ member }) => (
+          <span
+            className={`px-2 py-1 rounded text-xs ${
+              member.status === "active"
+                ? "bg-green-100 text-green-700"
+                : "bg-red-100 text-red-700"
+            }`}
+          >
+            {member.status}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "isVerified",
+        header: "Verified",
+        cell: ({ member }) => {
+          const isPending =
+            verifyMutation.isPending &&
+            verifyMutation.variables?.id === member.id;
+          return (
+            <input
+              type="checkbox"
+              checked={member.isVerified}
+              onChange={(e) =>
+                verifyMutation.mutate({
+                  id: member.id,
+                  isVerified: e.target.checked,
+                })
+              }
+              disabled={isPending}
+              className="w-4 h-4 rounded form-checkbox text-primary"
+            />
+          );
+        },
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        cell: ({ member }) => (
+          <button
+            onClick={() => setSelectedDelete(member)}
+            className="px-3 py-1 text-white rounded bg-error"
+            disabled={deleteMutation.isPending}
+          >
+            Delete
+          </button>
+        ),
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // keep deps minimal but stable; the mutation objects are stable refs from hooks
+    []
+  );
+
+  // -----------------------
+  // Event handlers (stable functions)
+  // -----------------------
+  const handleRoleChange = (id, nextRole) => {
+    roleMutation.mutate({ id, role: nextRole });
+  };
 
   const handleVerificationChange = (id, isVerified) => {
     verifyMutation.mutate({ id, isVerified });
   };
 
-  // ------- Delete mutation -------
-  const deleteMutation = useMutation({
-    mutationFn: (id) => api.delete(`/users/${id}`),
-    onMutate: async (idToDelete) => {
-      await queryClient.cancelQueries({
-        queryKey: ["members", page, limit, q],
-      });
-      const previous = queryClient.getQueryData({
-        queryKey: ["members", page, limit, q],
-      });
-      queryClient.setQueryData(
-        { queryKey: ["members", page, limit, q] },
-        (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            members: old.members.filter((m) => m.id !== idToDelete),
-          };
-        }
-      );
-      return { previous };
-    },
-    onError: (err, variables, context) => handleErrorRollback(context),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["members"] }),
-    onSuccess: () => toast.success("Member deleted"),
-  });
-
   const handleDelete = (id) => {
     deleteMutation.mutate(id);
-    setSelectedDelete(null);
   };
 
-  // When changing page/limit/search, reset page and close delete modal if open
   const onPageChange = (p) => {
     setPage(p);
     setSelectedDelete(null);
   };
 
-  // Responsive helpers
   const isBusy =
     isFetching ||
     roleMutation.isPending ||
     verifyMutation.isPending ||
     deleteMutation.isPending;
 
-  // UI Loading / Error
+  // -----------------------
+  // Early returns (after all hooks)
+  // -----------------------
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -195,9 +292,11 @@ const ManageMembers = () => {
     );
   }
 
+  // -----------------------
+  // Render UI (after all hooks)
+  // -----------------------
   return (
     <div className="space-y-6">
-      {/* Confirm Modal */}
       <ConfirmModal
         open={!!selectedDelete}
         title="Delete member"
@@ -206,7 +305,6 @@ const ManageMembers = () => {
         onConfirm={() => handleDelete(selectedDelete.id)}
       />
 
-      {/* Header & Controls */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-3xl font-bold text-text-primary">Manage Members</h1>
 
@@ -239,7 +337,6 @@ const ManageMembers = () => {
         </div>
       </div>
 
-      {/* Table */}
       <div className="overflow-x-auto">
         <table className="hidden min-w-full divide-y divide-gray-200 sm:table">
           <thead className="bg-gray-50">
@@ -363,7 +460,6 @@ const ManageMembers = () => {
           </tbody>
         </table>
 
-        {/* Mobile card view */}
         <div className="space-y-4 sm:hidden">
           {members.map((member) => (
             <div
@@ -457,15 +553,14 @@ const ManageMembers = () => {
         </div>
       </div>
 
-      {/* Footer: pagination controls */}
       <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <div className="text-sm text-text-secondary">
-          Page {currentPage} of {totalPages}{" "}
+          Page {page} of {totalPages}{" "}
           {isFetching && <span className="ml-2 text-xs">Updating…</span>}
         </div>
 
         <Pagination
-          page={currentPage}
+          page={page}
           totalPages={totalPages}
           setPage={onPageChange}
         />
