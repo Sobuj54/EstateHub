@@ -1,5 +1,7 @@
 // src/pages/user-profile-settings/index.jsx
 import React, { useState, useEffect } from "react";
+import { Helmet } from "react-helmet";
+import { useSearchParams } from "react-router-dom";
 import Header from "../../components/ui/Header";
 import ProfileInformation from "./components/ProfileInformation";
 import AccountSettings from "./components/AccountSettings";
@@ -11,25 +13,19 @@ import PaymentMethods from "./components/PaymentMethods";
 import ActivityHistory from "./components/ActivityHistory";
 import MobileTabNavigation from "./components/MobileTabNavigation";
 import DesktopTabNavigation from "./components/DesktopTabNavigation";
-import { Helmet } from "react-helmet";
 import useAuthContext from "hooks/useAuthContext";
-
-/**
- * UserProfileSettings
- * - Uses real auth context instead of dummy data
- * - Keeps your existing tab / save UX (auto-save simulation)
- * - Exports real user data from auth context
- */
 
 const UserProfileSettings = () => {
   const { user, loading: authLoading, userStatus } = useAuthContext();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentTab = searchParams.get("tab") || "profile";
 
-  const [activeTab, setActiveTab] = useState("profile");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState("saved");
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Tabs: roles use your actual roles: 'member', 'agent', 'admin', 'super_admin'
+  // Tabs configuration
   const tabs = [
     {
       id: "profile",
@@ -50,7 +46,7 @@ const UserProfileSettings = () => {
       label: "Saved Searches",
       icon: "Search",
       component: SavedSearches,
-      roles: ["member"], // previously 'buyer' -> mapped to 'member'
+      roles: ["member"],
     },
     {
       id: "favorites",
@@ -89,52 +85,34 @@ const UserProfileSettings = () => {
     },
   ];
 
-  // Helper: determine if a tab is visible for current user role
   const tabVisibleForUser = (tab, userRole) => {
     if (!tab.roles || tab.roles.includes("all")) return true;
     if (!userRole) return false;
     return tab.roles.includes(userRole);
   };
 
-  // compute filteredTabs from real auth user
   const filteredTabs = tabs.filter((tab) => {
-    if (!user) {
-      // when user is not loaded yet, keep universal tabs only
-      return tab.roles.includes("all");
-    }
+    if (!user) return tab.roles.includes("all");
     return tabVisibleForUser(tab, user.role);
   });
 
+  // Skeleton loader effect
   useEffect(() => {
-    // Page skeleton while component mounts and auth resolves.
-    // Wait for auth to resolve (or at most 1s) so UI doesn't flash.
-    let timer = null;
-
     if (authLoading) {
       setIsLoading(true);
-      // Will be cleared when authLoading becomes false via next effect
     } else {
-      // Give a tiny fade-in feel
-      timer = setTimeout(() => setIsLoading(false), 300);
+      const timer = setTimeout(() => setIsLoading(false), 300);
+      return () => clearTimeout(timer);
     }
-
-    return () => clearTimeout(timer);
   }, [authLoading]);
 
+  // Auto-save effect
   useEffect(() => {
-    // Auto-save functionality — we keep your existing simulated save behavior,
-    // but you can change this to call real API to persist changes.
     if (hasUnsavedChanges) {
       setAutoSaveStatus("saving");
-
-      // Simulated API save: you can replace this with an actual save call.
       const saveTimer = setTimeout(async () => {
         try {
-          // Optionally: if you have an endpoint to refresh user status after internal saves:
-          if (typeof userStatus === "function") {
-            // refresh auth user info from backend
-            await userStatus();
-          }
+          if (typeof userStatus === "function") await userStatus();
           setAutoSaveStatus("saved");
           setHasUnsavedChanges(false);
         } catch (err) {
@@ -147,6 +125,7 @@ const UserProfileSettings = () => {
     }
   }, [hasUnsavedChanges, userStatus]);
 
+  // Tab change handler
   const handleTabChange = (tabId) => {
     if (hasUnsavedChanges) {
       if (
@@ -154,37 +133,28 @@ const UserProfileSettings = () => {
           "You have unsaved changes. Are you sure you want to leave this section?"
         )
       ) {
-        setActiveTab(tabId);
+        setSearchParams({ tab: tabId });
         setHasUnsavedChanges(false);
         setIsMobileMenuOpen(false);
       }
     } else {
-      setActiveTab(tabId);
+      setSearchParams({ tab: tabId });
       setIsMobileMenuOpen(false);
     }
   };
 
-  const handleDataChange = () => {
-    // Called by child components to mark something dirty
-    setHasUnsavedChanges(true);
-  };
+  const handleDataChange = () => setHasUnsavedChanges(true);
 
   const handleExportData = () => {
-    // Export user data from real auth context (if available)
-    const exportUser = user || {
-      id: "unknown",
-      name: "guest",
-      email: "",
-    };
-
+    const exportUser = user || { id: "unknown", name: "guest", email: "" };
     const exportData = {
       profile: exportUser,
       exportDate: new Date().toISOString(),
       dataType: "personal_data",
     };
-
-    const dataStr = JSON.stringify(exportData, null, 2);
-    const dataBlob = new Blob([dataStr], { type: "application/json" });
+    const dataBlob = new Blob([JSON.stringify(exportData, null, 2)], {
+      type: "application/json",
+    });
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement("a");
     link.href = url;
@@ -197,54 +167,23 @@ const UserProfileSettings = () => {
     URL.revokeObjectURL(url);
   };
 
-  // Active component to render for the tab
   const ActiveTabComponent =
-    filteredTabs.find((tab) => tab.id === activeTab)?.component ||
+    filteredTabs.find((tab) => tab.id === currentTab)?.component ||
     ProfileInformation;
 
-  // If auth loading show skeleton (we already have isLoading skeleton)
-  if (authLoading) {
+  if (authLoading || isLoading) {
     return (
       <div className="min-h-screen bg-background">
         <Header />
-        <div className="pt-16 lg:pt-18">
-          <div className="px-4 py-8 mx-auto max-w-7xl sm:px-6 lg:px-8">
-            {/* Header Skeleton */}
-            <div className="mb-8">
-              <div className="w-1/3 h-8 mb-4 rounded bg-secondary-100 skeleton"></div>
-              <div className="w-1/2 h-4 rounded bg-secondary-100 skeleton"></div>
-            </div>
-
-            {/* Content Skeleton */}
-            <div className="grid grid-cols-1 gap-8 lg:grid-cols-4">
-              {/* Sidebar Skeleton */}
-              <div className="lg:col-span-1">
-                <div className="space-y-2">
-                  {[...Array(6)].map((_, i) => (
-                    <div
-                      key={i}
-                      className="h-12 rounded bg-secondary-100 skeleton"
-                    ></div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Main Content Skeleton */}
-              <div className="lg:col-span-3">
-                <div className="space-y-6">
-                  <div className="h-64 rounded-lg bg-secondary-100 skeleton"></div>
-                  <div className="h-48 rounded-lg bg-secondary-100 skeleton"></div>
-                  <div className="h-32 rounded-lg bg-secondary-100 skeleton"></div>
-                </div>
-              </div>
-            </div>
-          </div>
+        <div className="px-4 py-8 pt-16 mx-auto lg:pt-18 max-w-7xl">
+          {/* Skeleton UI */}
+          <div className="w-1/3 h-8 mb-4 rounded bg-secondary-100 skeleton"></div>
+          <div className="w-1/2 h-4 rounded bg-secondary-100 skeleton"></div>
         </div>
       </div>
     );
   }
 
-  // Main UI (user present)
   return (
     <>
       <Helmet>
@@ -252,104 +191,88 @@ const UserProfileSettings = () => {
       </Helmet>
       <div className="min-h-screen bg-background">
         <Header />
+        <main className="px-4 py-8 pt-16 mx-auto lg:pt-18 max-w-7xl">
+          <div className="flex flex-col mb-8 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h1 className="mb-2 text-3xl font-bold text-text-primary font-heading">
+                Profile & Settings
+              </h1>
+              <p className="text-text-secondary">
+                Manage your account information and preferences
+              </p>
+            </div>
+            <div className="flex items-center mt-4 space-x-4 md:mt-0">
+              <div className="flex items-center space-x-2 text-sm">
+                {autoSaveStatus === "saving" && (
+                  <>
+                    <div className="w-4 h-4 border-2 rounded-full border-primary border-t-transparent animate-spin"></div>
+                    <span className="text-text-secondary">Saving...</span>
+                  </>
+                )}
+                {autoSaveStatus === "saved" && (
+                  <>
+                    <div className="flex items-center justify-center w-4 h-4 rounded-full bg-success">
+                      <svg
+                        className="w-2.5 h-2.5 text-white"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </div>
+                    <span className="text-success">Saved</span>
+                  </>
+                )}
+                {autoSaveStatus === "error" && (
+                  <>
+                    <div className="w-4 h-4 rounded-full bg-error"></div>
+                    <span className="text-error">Save failed</span>
+                  </>
+                )}
+              </div>
+              <button
+                onClick={handleExportData}
+                className="text-sm font-medium transition-colors duration-200 text-primary hover:text-primary-700"
+              >
+                Export Data
+              </button>
+            </div>
+          </div>
 
-        <main className="pt-16 lg:pt-18">
-          <div className="px-4 py-8 mx-auto max-w-7xl sm:px-6 lg:px-8">
-            {/* Page Header */}
-            <div className="mb-8">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-                <div>
-                  <h1 className="mb-2 text-3xl font-bold text-text-primary font-heading">
-                    Profile & Settings
-                  </h1>
-                  <p className="text-text-secondary">
-                    Manage your account information and preferences
-                  </p>
-                </div>
+          {/* Mobile Tabs */}
+          <div className="mb-6 lg:hidden">
+            <MobileTabNavigation
+              tabs={filteredTabs}
+              activeTab={currentTab}
+              onTabChange={handleTabChange}
+              isMenuOpen={isMobileMenuOpen}
+              onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            />
+          </div>
 
-                {/* Auto-save Status & Export */}
-                <div className="flex items-center mt-4 space-x-4 md:mt-0">
-                  {/* Auto-save Status */}
-                  <div className="flex items-center space-x-2 text-sm">
-                    {autoSaveStatus === "saving" && (
-                      <>
-                        <div className="w-4 h-4 border-2 rounded-full border-primary border-t-transparent animate-spin"></div>
-                        <span className="text-text-secondary">Saving...</span>
-                      </>
-                    )}
-                    {autoSaveStatus === "saved" && (
-                      <>
-                        <div className="flex items-center justify-center w-4 h-4 rounded-full bg-success">
-                          <svg
-                            className="w-2.5 h-2.5 text-white"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        </div>
-                        <span className="text-success">Saved</span>
-                      </>
-                    )}
-                    {autoSaveStatus === "error" && (
-                      <>
-                        <div className="w-4 h-4 rounded-full bg-error"></div>
-                        <span className="text-error">Save failed</span>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Export Button */}
-                  <button
-                    onClick={handleExportData}
-                    className="text-sm font-medium transition-colors duration-200 text-primary hover:text-primary-700"
-                  >
-                    Export Data
-                  </button>
-                </div>
+          {/* Desktop Layout */}
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-4">
+            <div className="hidden lg:block lg:col-span-1">
+              <div className="lg:sticky lg:top-20 lg:max-h-screen lg:overflow-y-auto lg:pb-20">
+                <DesktopTabNavigation
+                  tabs={filteredTabs}
+                  activeTab={currentTab}
+                  onTabChange={handleTabChange}
+                />
               </div>
             </div>
-
-            {/* Mobile Tab Navigation */}
-            <div className="mb-6 lg:hidden">
-              <MobileTabNavigation
-                tabs={filteredTabs}
-                activeTab={activeTab}
-                onTabChange={handleTabChange}
-                isMenuOpen={isMobileMenuOpen}
-                onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              />
-            </div>
-
-            {/* Desktop Layout */}
-            <div className="grid grid-cols-1 gap-8 lg:grid-cols-4">
-              {/* Desktop Sidebar Navigation */}
-              <div className="hidden lg:block lg:col-span-1">
-                <div className="lg:sticky lg:top-20 lg:max-h-screen lg:overflow-y-auto lg:pb-20">
-                  <DesktopTabNavigation
-                    tabs={filteredTabs}
-                    activeTab={activeTab}
-                    onTabChange={handleTabChange}
-                  />
-                </div>
-              </div>
-
-              {/* Main Content Area */}
-              <div className="lg:col-span-3">
-                <div className="min-h-screen lg:min-h-0">
-                  {ActiveTabComponent && (
-                    <ActiveTabComponent
-                      user={user}
-                      onDataChange={handleDataChange}
-                      hasUnsavedChanges={hasUnsavedChanges}
-                    />
-                  )}
-                </div>
-              </div>
+            <div className="lg:col-span-3">
+              {ActiveTabComponent && (
+                <ActiveTabComponent
+                  user={user}
+                  onDataChange={handleDataChange}
+                  hasUnsavedChanges={hasUnsavedChanges}
+                />
+              )}
             </div>
           </div>
         </main>

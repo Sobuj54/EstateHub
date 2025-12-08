@@ -2,12 +2,13 @@
 
 import React, { useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import { toast } from "react-toastify";
+import { useMutation } from "@tanstack/react-query";
 
 import Header from "../../components/ui/Header";
 import Icon from "../../components/AppIcon";
 import Image from "../../components/AppImage";
 
-// Import components
 import ImageGallery from "./components/ImageGallery";
 import PropertyOverview from "./components/PropertyOverview";
 import PropertyTabs from "./components/PropertyTabs";
@@ -17,25 +18,112 @@ import SimilarProperties from "./components/SimilarProperties";
 import LoadingState from "./components/LoadingState";
 import { Helmet } from "react-helmet";
 import { usePropertyDetailsQuery } from "hooks/usePropertyDetails";
+import useAuthContext from "hooks/useAuthContext";
+import useAxiosSecure from "hooks/useAxiosSecure";
 
 const PropertyDetails = () => {
   const { id: propertyId } = useParams();
+  const { user } = useAuthContext();
+  const axiosSecure = useAxiosSecure();
 
-  // ⭐️ 1. Use the Tanstack Query hook to fetch and manage state
   const {
     data: property,
-    isLoading, // True on first load
-    isFetching, // True during background refetching
+    isLoading,
     isError,
   } = usePropertyDetailsQuery(propertyId);
 
-  // Local UI states remain
-  const [isSaved, setIsSaved] = useState(false);
   const [activeTab, setActiveTab] = useState("description");
   const [showMortgageCalculator, setShowMortgageCalculator] = useState(false);
   const [showContactForm, setShowContactForm] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
 
-  // Mock data for similar properties (remains static)
+  // Mutation to save property
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      if (!user) {
+        toast.info("You must be logged in to save properties.");
+        throw new Error("User not logged in");
+      }
+
+      const res = await axiosSecure.post("/saved-properties", {
+        propertyId: property._id,
+        userId: user._id,
+      });
+
+      return res.data;
+    },
+    onSuccess: () => {
+      setIsSaved(true);
+      toast.success("Property saved successfully!");
+    },
+    onError: (err) => {
+      const message =
+        err?.response?.data?.message ||
+        err.message ||
+        "Failed to save property";
+      toast.error(message);
+    },
+  });
+
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator.share({
+        title: property?.title,
+        text: `Check out this property: ${property?.title}`,
+        url: window.location.href,
+      });
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      toast.info("Link copied to clipboard!");
+    }
+  };
+
+  const getBreadcrumbs = () => [
+    { label: "Home", path: "/homepage" },
+    { label: "Properties", path: "/property-listings" },
+    { label: property?.title || "Property Details", path: null },
+  ];
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <LoadingState />
+      </div>
+    );
+  }
+
+  if (!property || isError) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="pt-20 lg:pt-18">
+          <div className="px-4 py-12 mx-auto text-center max-w-7xl sm:px-6 lg:px-8">
+            <Icon
+              name="Home"
+              size={64}
+              className="mx-auto mb-4 text-secondary"
+            />
+            <h1 className="mb-2 text-2xl font-bold text-text-primary">
+              {isError ? "Error Loading Property" : "Property Not Found"}
+            </h1>
+            <p className="mb-6 text-text-secondary">
+              The property you're looking for doesn't exist or there was a
+              network error.
+            </p>
+            <Link
+              to="/property-listings"
+              className="inline-flex items-center px-6 py-3 space-x-2 text-white transition-all duration-200 rounded-md bg-primary hover:bg-primary-700"
+            >
+              <Icon name="ArrowLeft" size={16} />
+              <span>Back to Properties</span>
+            </Link>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   const similarProperties = [
     {
       id: 2,
@@ -49,81 +137,7 @@ const PropertyDetails = () => {
         "https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg?auto=compress&cs=tinysrgb&w=800",
       ],
     },
-    // ... rest of the mock data
   ];
-
-  // ⭐️ 2. Remove the old useEffect block (now handled by usePropertyDetailsQuery)
-  // useEffect(() => { ... fetchProperty ... }, [propertyId]);
-
-  const handleSave = () => {
-    setIsSaved(!isSaved);
-    // In real app, sync with backend
-  };
-
-  const handleShare = () => {
-    if (navigator.share) {
-      navigator.share({
-        title: property?.title,
-        text: `Check out this property: ${property?.title}`,
-        url: window.location.href,
-      });
-    } else {
-      navigator.clipboard.writeText(window.location.href);
-    }
-  };
-
-  const getBreadcrumbs = () => {
-    const breadcrumbs = [
-      { label: "Home", path: "/homepage" },
-      { label: "Properties", path: "/property-listings" },
-      { label: property?.title || "Property Details", path: null },
-    ];
-    return breadcrumbs;
-  };
-
-  // ⭐️ 3. Use Tanstack Query states for conditional rendering
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <LoadingState />
-      </div>
-    );
-  }
-
-  // Handle case where property is null (e.g., API 404 or bad ID)
-  if (!property || isError) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <main className="pt-20 lg:pt-18">
-          <div className="px-4 py-12 mx-auto max-w-7xl sm:px-6 lg:px-8">
-            <div className="text-center">
-              <Icon
-                name="Home"
-                size={64}
-                className="mx-auto mb-4 text-secondary"
-              />
-              <h1 className="mb-2 text-2xl font-bold text-text-primary">
-                {isError ? "Error Loading Property" : "Property Not Found"}
-              </h1>
-              <p className="mb-6 text-text-secondary">
-                The property you're looking for doesn't exist or there was a
-                network error.
-              </p>
-              <Link
-                to="/property-listings"
-                className="inline-flex items-center px-6 py-3 space-x-2 text-white transition-all duration-200 rounded-md bg-primary hover:bg-primary-700"
-              >
-                <Icon name="ArrowLeft" size={16} />
-                <span>Back to Properties</span>
-              </Link>
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  }
 
   return (
     <>
@@ -168,14 +182,14 @@ const PropertyDetails = () => {
           {/* Mobile Actions Bar */}
           <div className="sticky z-10 border-b lg:hidden bg-surface border-border top-16">
             <div className="flex items-center justify-between px-4 py-3">
-              {/* ... Action buttons remain the same ... */}
               <div className="flex items-center space-x-3">
                 <button
-                  onClick={handleSave}
+                  onClick={() => saveMutation.mutate()}
+                  disabled={saveMutation.isLoading}
                   className={`p-2 rounded-md transition-all duration-200 ${
                     isSaved
-                      ? "bg-error text-white"
-                      : "bg-secondary-100 text-text-secondary hover:bg-error hover:text-white"
+                      ? "bg-success text-white"
+                      : "bg-secondary-100 text-text-secondary hover:bg-primary hover:text-white"
                   }`}
                 >
                   <Icon
@@ -208,26 +222,20 @@ const PropertyDetails = () => {
           {/* Main Content */}
           <div className="px-4 py-6 mx-auto max-w-7xl sm:px-6 lg:px-8">
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-              {/* Left Column - Main Content */}
               <div className="space-y-6 lg:col-span-2">
-                {/* Image Gallery */}
                 <ImageGallery
                   images={property.images}
                   title={property.title}
                   virtualTour={property.virtualTour}
                   video={property.video}
                 />
-
-                {/* Property Overview */}
                 <PropertyOverview
                   property={property}
                   isSaved={isSaved}
-                  onSave={handleSave}
+                  onSave={() => saveMutation.mutate()}
                   onShare={handleShare}
                   onContact={() => setShowContactForm(true)}
                 />
-
-                {/* Property Tabs */}
                 <PropertyTabs
                   property={property}
                   activeTab={activeTab}
@@ -235,14 +243,11 @@ const PropertyDetails = () => {
                 />
               </div>
 
-              {/* Right Column - Sidebar */}
               <div className="space-y-6">
-                {/* Mortgage Calculator */}
                 <div className="hidden lg:block">
                   <MortgageCalculator propertyPrice={property.price} />
                 </div>
 
-                {/* Mobile Mortgage Calculator Toggle */}
                 <div className="lg:hidden">
                   <button
                     onClick={() =>
@@ -275,7 +280,6 @@ const PropertyDetails = () => {
                   )}
                 </div>
 
-                {/* Agent Contact Card (Dynamic Agent Data) */}
                 <div className="p-6 card">
                   <div className="flex items-center mb-4 space-x-4">
                     <Image
@@ -338,14 +342,12 @@ const PropertyDetails = () => {
               </div>
             </div>
 
-            {/* Similar Properties */}
             <div className="mt-12">
               <SimilarProperties properties={similarProperties} />
             </div>
           </div>
         </main>
 
-        {/* Contact Form Modal */}
         {showContactForm && (
           <ContactForm
             property={property}

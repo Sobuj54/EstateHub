@@ -1,6 +1,8 @@
+import useAxiosSecure from "hooks/useAxiosSecure";
 import { toast } from "react-toastify";
 
 const logout = async (setLoading, setUser, setToken) => {
+  const axiosSecure = useAxiosSecure();
   try {
     setLoading(true);
     await axiosSecure.post("/auth/logout");
