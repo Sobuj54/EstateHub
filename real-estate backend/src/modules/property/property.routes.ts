@@ -5,9 +5,13 @@ import {
   deleteAProperty,
   getAllProperties,
   getAProperty,
+  verifyProperty,
 } from './property.controller';
 import { validateZodRequest } from '../../middlewares/zodValidationMiddleware';
-import { PropertyZodSchema } from './property.validation';
+import {
+  PropertyZodSchema,
+  verifyPropertyZodSchema,
+} from './property.validation';
 import { verifyAuthorization } from '../../middlewares/verifyAuthorization';
 import { USER_ROLE } from '../../enums/user';
 
@@ -30,6 +34,14 @@ router
     verifyJWT,
     verifyAuthorization([USER_ROLE.ADMIN, USER_ROLE.SUPER_ADMIN]),
     deleteAProperty
+  );
+router
+  .route('/verify/:id')
+  .patch(
+    validateZodRequest(verifyPropertyZodSchema, 'params'),
+    verifyJWT,
+    verifyAuthorization([USER_ROLE.ADMIN, USER_ROLE.SUPER_ADMIN]),
+    verifyProperty
   );
 
 export const propertyRoutes = router;

@@ -14,7 +14,8 @@ const addProperty = async (
 
 const getProperties = async (
   limit: number,
-  pageNo: number
+  pageNo: number,
+  query: string
 ): Promise<{
   properties: IProperty[];
   currentPage: number;
@@ -22,7 +23,17 @@ const getProperties = async (
 }> => {
   const skip = (pageNo - 1) * limit;
 
-  const properties = await Property.find({})
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const filter: any = {};
+
+  if (query) {
+    filter.$or = [
+      { title: { $regex: query, $options: 'i' } },
+      { address: { $regex: query, $options: 'i' } },
+    ];
+  }
+
+  const properties = await Property.find(filter)
     .limit(limit)
     .skip(skip)
     .sort({ createdAt: -1 })
@@ -38,7 +49,7 @@ const getProperties = async (
     .lean();
   if (!properties.length) throw new ApiError(404, 'NO properties found.');
 
-  const totalProperties = await Property.countDocuments();
+  const totalProperties = await Property.countDocuments(filter);
 
   const totalPage = Math.ceil(totalProperties / limit);
 
@@ -66,4 +77,25 @@ const deleteProperty = async (id: string) => {
   if (!property) throw new ApiError(404, 'property deletion failed.');
 };
 
-export { addProperty, getProperties, getProperty, deleteProperty };
+const verifyAProperty = async (id: string): Promise<IProperty> => {
+  const property = await Property.findByIdAndUpdate(
+    id,
+    {
+      $set: {
+        isApproved: true,
+      },
+    },
+    { new: true }
+  ).lean();
+
+  if (!property) throw new ApiError(400, 'No property found.');
+  return property;
+};
+
+export {
+  addProperty,
+  getProperties,
+  getProperty,
+  deleteProperty,
+  verifyAProperty,
+};

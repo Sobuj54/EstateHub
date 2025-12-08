@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { z } from 'zod';
 
 const CoordinatesZodSchema = z.object({
@@ -44,3 +45,11 @@ export const PropertyZodSchema = z.object({
 
 // Infer the TypeScript type from the Zod schema for strong typing throughout your application
 export type IPropertyZod = z.infer<typeof PropertyZodSchema>;
+
+export const verifyPropertyZodSchema = z.object({
+  id: z
+    .string()
+    .refine((id) => mongoose.Types.ObjectId.isValid(id), {
+      error: 'Valid property id required.',
+    }),
+});

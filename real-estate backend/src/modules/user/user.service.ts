@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import jwt, { Secret } from 'jsonwebtoken';
 import { refreshTokenType } from '../auth/auth.interface';
 import { User } from './user.model';
@@ -155,20 +156,29 @@ const dashboardSummary = async (): Promise<DashboardSummary> => {
 
 const getAgents = async (
   limit: number,
-  pageNo: number
+  pageNo: number,
+  query: string
 ): Promise<UserReturnType<IUser>> => {
-  if (limit < 0) limit = 0;
+  if (limit <= 0) limit = 10;
+  if (pageNo < 1) pageNo = 1;
   const skip = (pageNo - 1) * limit;
-  const agents = await User.find({ role: USER_ROLE.AGENT })
+  const filter: any = { role: USER_ROLE.AGENT };
+
+  if (query) {
+    filter.$or = [
+      { name: { $regex: query, $options: 'i' } },
+      { email: { $regex: query, $options: 'i' } },
+    ];
+  }
+
+  const agents = await User.find(filter)
     .limit(limit)
     .skip(skip)
     .select('-refreshToken')
     .lean();
 
   if (!agents.length) throw new ApiError(404, 'NO agent found.');
-  const totalAgents = await User.countDocuments({
-    role: USER_ROLE.AGENT,
-  });
+  const totalAgents = await User.countDocuments(filter);
 
   const totalPages = Math.ceil(totalAgents / limit);
   return {
@@ -208,11 +218,22 @@ const verifiedAgents = async (
 
 const getMembers = async (
   limit: number,
-  pageNo: number
+  pageNo: number,
+  query: string
 ): Promise<UserReturnType<IUser>> => {
   if (limit < 0) limit = 0;
   const skip = (pageNo - 1) * limit;
-  const members = await User.find({ role: USER_ROLE.MEMBER })
+
+  const filter: any = { role: USER_ROLE.MEMBER };
+
+  if (query) {
+    filter.$or = [
+      { name: { $regex: query, $options: 'i' } },
+      { email: { $regex: query, $options: 'i' } },
+    ];
+  }
+
+  const members = await User.find(filter)
     .limit(limit)
     .skip(skip)
     .select('-refreshToken')
@@ -220,9 +241,7 @@ const getMembers = async (
 
   if (!members.length) throw new ApiError(404, 'NO agent found.');
 
-  const totalMembers = await User.countDocuments({
-    role: USER_ROLE.MEMBER,
-  });
+  const totalMembers = await User.countDocuments(filter);
 
   const totalPages = Math.ceil(totalMembers / limit);
   return {

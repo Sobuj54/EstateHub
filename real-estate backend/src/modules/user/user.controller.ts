@@ -39,8 +39,12 @@ const getDashobardSummary = asyncHandler(async (req, res) => {
 });
 
 const getAllAgents = asyncHandler(async (req, res) => {
-  const { limit = 3, pageNo = 1 } = req.query;
-  const result = await getAgents(Number(limit), Number(pageNo));
+  const { limit = 3, pageNo = 1, query } = req.query;
+  const result = await getAgents(
+    Number(limit),
+    Number(pageNo),
+    query as string
+  );
   res.status(200).json(new ApiResponse(200, result, 'Retrieved all agents.'));
 });
 
@@ -51,8 +55,12 @@ const getVerifiedAgents = asyncHandler(async (req, res) => {
 });
 
 const getAllMembers = asyncHandler(async (req, res) => {
-  const { limit = 10, pageNo = 1 } = req.query;
-  const result = await getMembers(Number(limit), Number(pageNo));
+  const { limit = 10, pageNo = 1, query } = req.query;
+  const result = await getMembers(
+    Number(limit),
+    Number(pageNo),
+    query as string
+  );
   res.status(200).json(new ApiResponse(200, result, 'Retrieved all members.'));
 });
 
