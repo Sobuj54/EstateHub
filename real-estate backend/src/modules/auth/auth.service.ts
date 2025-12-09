@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 import ApiError from '../../utils/ApiError';
 import { IUser, UserDocument } from '../user/user.interface';
 import { User } from '../user/user.model';
@@ -27,15 +28,22 @@ const register = async (userData: IUser) => {
   if (!user) throw new ApiError(400, 'User creation failed.');
 };
 
-const logout = async (id: string) => {
-  const user = await User.findByIdAndUpdate(
-    id,
-    {
-      $unset: { refreshToken: 1 },
-    },
-    { new: true }
-  );
-  if (!user) throw new ApiError(404, 'Logout failed.');
+const logout = async (token: string) => {
+  if (!token) return;
+
+  let decodedToken: refreshTokenType;
+  try {
+    decodedToken = jwt.verify(
+      token,
+      process.env.REFRESH_TOKEN_SECRET as string
+    ) as refreshTokenType;
+  } catch (error) {
+    return;
+  }
+
+  await User.findByIdAndUpdate(decodedToken._id, {
+    $unset: { refreshToken: 1 },
+  });
 };
 
 const refreshAccessToken = async (

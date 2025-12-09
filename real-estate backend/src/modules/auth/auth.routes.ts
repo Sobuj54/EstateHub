@@ -26,7 +26,7 @@ router
   .post(validateZodRequest(registerZodSchema), registerUser);
 
 router.route('/login').post(validateZodRequest(loginZodSchema), loginUser);
-router.route('/logout').post(verifyJWT, logoutUser);
+router.route('/logout').post(logoutUser);
 router
   .route('/refresh-token')
   .get(validateZodRequest(refreshTokenZodSchema, 'cookies'), refreshToken);

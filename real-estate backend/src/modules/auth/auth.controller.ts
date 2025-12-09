@@ -54,7 +54,8 @@ const registerUser = asyncHandler(async (req, res) => {
 });
 
 const logoutUser = asyncHandler(async (req, res) => {
-  await logout(req.user?._id as string);
+  const { refreshToken } = req.cookies;
+  await logout(refreshToken);
   res
     .status(200)
     .clearCookie('refreshToken', { ...cookieOptions, maxAge: 0 })
