@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import Icon from "components/AppIcon";
 import useAuthContext from "hooks/useAuthContext";
+import { ToastContainer } from "react-toastify";
 
 const MemberLayout = () => {
   const [collapsed, setCollapsed] = useState(false);
@@ -17,7 +18,6 @@ const MemberLayout = () => {
     { label: "Appointments", to: "/member/appointments", icon: "Calendar" },
     { label: "Messages", to: "/member/messages", icon: "MessageCircle" },
     { label: "Notifications", to: "/member/notifications", icon: "Bell" },
-    { label: "Profile", to: "/member/profile", icon: "User" },
   ];
 
   if (!user) return null;
@@ -26,6 +26,18 @@ const MemberLayout = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="colored"
+      />
       {/* Mobile Header */}
       <header className="sticky top-0 z-30 flex items-center justify-between p-4 border-b md:hidden border-border bg-surface">
         <div

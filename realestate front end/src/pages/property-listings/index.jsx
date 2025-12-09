@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 
@@ -12,12 +12,16 @@ import SortDropdown from "./components/SortDropdown";
 import { Helmet } from "react-helmet";
 import Pagination from "components/ui/Pagination";
 
-const API_URL = import.meta.env.VITE_API; // Make sure you have this in .env
+const API_URL = import.meta.env.VITE_API;
 
 const fetchProperties = async ({ queryKey }) => {
-  const [_key, { page, limit }] = queryKey;
+  const [_key, { page, limit, query }] = queryKey;
   const response = await axios.get(`${API_URL}/properties`, {
-    params: { pageNo: page, limit },
+    params: {
+      pageNo: page,
+      limit,
+      ...(query ? { query } : {}), // only include query if present
+    },
   });
   return response.data.data;
 };
@@ -30,8 +34,11 @@ const PropertyListings = () => {
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [sortBy, setSortBy] = useState("relevance");
 
+  const [searchParams] = useSearchParams();
+  const searchQuery = searchParams.get("search") || "";
+
   const { data, isLoading, isFetching, isError } = useQuery({
-    queryKey: ["properties", { page, limit: 10 }],
+    queryKey: ["properties", { page, limit: 10, query: searchQuery }],
     queryFn: fetchProperties,
     keepPreviousData: true,
   });
@@ -58,7 +65,7 @@ const PropertyListings = () => {
   };
 
   const handlePropertySave = (propertyId, isSaved) => {
-    const queryKey = ["properties", { page, limit: 10 }];
+    const queryKey = ["properties", { page, limit: 10, query: searchQuery }];
     queryClient.setQueryData(queryKey, (oldData) => {
       if (!oldData) return oldData;
       return {
@@ -79,14 +86,25 @@ const PropertyListings = () => {
 
   if (isError) {
     return (
-      <div className="p-8 text-center bg-red-100 border border-red-300 rounded-lg">
-        <h2 className="text-xl font-bold text-red-800">
-          Error Loading Properties
+      <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 mx-4 my-12 bg-surface border border-border rounded-lg shadow-sm text-center">
+        <Icon
+          name="ExclamationCircle"
+          size={48}
+          className="mb-4 text-primary"
+        />
+        <h2 className="mb-2 text-2xl font-semibold text-text-primary">
+          Oops! Something went wrong
         </h2>
-        <p className="text-red-700">
-          Failed to fetch property data. Please check your network or API
-          endpoint.
+        <p className="max-w-md mb-4 text-text-secondary">
+          We couldn't fetch the property listings. This could be due to a
+          network issue or a temporary server problem.
         </p>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-6 py-2 font-medium text-white transition-all duration-200 rounded-md bg-primary hover:bg-primary-700"
+        >
+          Retry
+        </button>
       </div>
     );
   }
