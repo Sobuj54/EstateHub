@@ -2,8 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import Icon from "../AppIcon";
 import useAuthContext from "hooks/useAuthContext";
-import { toast, ToastContainer } from "react-toastify";
-import useAxiosSecure from "hooks/useAxiosSecure";
+import { ToastContainer } from "react-toastify";
 
 const Header = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -14,9 +13,8 @@ const Header = () => {
   const navigate = useNavigate();
   const userMenuRef = useRef(null);
   const mobileMenuRef = useRef(null);
-  const axiosSecure = useAxiosSecure();
 
-  const { user, setUser, setToken, setLoading, loading } = useAuthContext();
+  const { user, loading, logout } = useAuthContext();
 
   const navigationItems = [
     {
@@ -92,43 +90,11 @@ const Header = () => {
     }
   };
 
-  const logout = async () => {
-    try {
-      setLoading(true);
-      await axiosSecure.post("/auth/logout");
-      setUser(null);
-      setToken(null);
-      setLoading(false);
-      navigate("/");
-      toast.success("Logout Successful!", {
-        position: "top-right",
-        autoClose: 5000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "colored",
-      });
-    } catch (error) {
-      setLoading(false);
-      toast.error("Logout Failed.", {
-        position: "top-right",
-        autoClose: 5000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "colored",
-      });
-    }
-  };
-
   const handleUserAction = async (action) => {
     if (action === "logout") {
       if (typeof logout === "function") {
         await logout();
+        navigate("/");
         setIsUserMenuOpen(false);
       }
       return;

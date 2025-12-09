@@ -1,5 +1,6 @@
 import axios from "axios";
 import { createContext, useEffect, useState } from "react";
+import { toast } from "react-toastify";
 
 export const AuthContext = createContext(null);
 
@@ -30,6 +31,8 @@ const AuthProvider = ({ children }) => {
       setToken(res.data.data.accessToken);
       setLoading(false);
     } catch (error) {
+      setUser(null);
+      setToken(null);
       setLoading(false);
     }
   };
@@ -37,6 +40,29 @@ const AuthProvider = ({ children }) => {
   useEffect(() => {
     userStatus();
   }, []);
+
+  const logout = async () => {
+    setLoading(true);
+    try {
+      await axios.post(`${url}/auth/logout`, {}, { withCredentials: true });
+      toast.success("Logout Successful!", {
+        position: "top-right",
+        autoClose: 5000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        progress: undefined,
+        theme: "colored",
+      });
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setToken(null);
+      setUser(null);
+      setLoading(false);
+    }
+  };
 
   const authInfo = {
     user,
@@ -47,6 +73,7 @@ const AuthProvider = ({ children }) => {
     setToken,
     login,
     userStatus,
+    logout,
   };
   return (
     <AuthContext.Provider value={authInfo}>{children}</AuthContext.Provider>
