@@ -47,7 +47,7 @@ const getProperties = async (
       },
     })
     .lean();
-  if (!properties.length) throw new ApiError(404, 'NO properties found.');
+  if (!properties.length) throw new ApiError(200, 'NO properties found.');
 
   const totalProperties = await Property.countDocuments(filter);
 

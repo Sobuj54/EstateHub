@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   addSavedProperty,
+  deleteASavedProperty,
   getSavedProperties,
 } from './savedProperty.controller';
 import { validateZodRequest } from '../../middlewares/zodValidationMiddleware';
@@ -18,5 +19,6 @@ router
   );
 
 router.route('/').get(verifyJWT, getSavedProperties);
+router.route('/:id').delete(verifyJWT, deleteASavedProperty);
 
 export const savedPropertyRoutes = router;

@@ -13,7 +13,26 @@ const addProperty = async (propertyId: string, userId: string) => {
 };
 
 const savedProperties = async (id: string, limit: number, pageNo: number) => {
+  limit = Math.max(1, limit);
+  pageNo = Math.max(1, pageNo);
+
+  const totalSavedProperties = await SavedProperty.countDocuments({
+    userId: id,
+  });
+
+  let totalPages = 0;
+
+  if (totalSavedProperties === 0) {
+    return { savedProperties: [], currentPage: 1, totalPages: 0 };
+  }
+
+  totalPages = Math.ceil(totalSavedProperties / limit);
+
+  if (pageNo > totalPages) {
+    pageNo = totalPages;
+  }
   const skip = (pageNo - 1) * limit;
+
   const savedProperties = await SavedProperty.find({ userId: id })
     .populate({
       path: 'propertyId',
@@ -21,21 +40,18 @@ const savedProperties = async (id: string, limit: number, pageNo: number) => {
         'title price address images description bedrooms bathrooms sqft createdAt',
       populate: {
         path: 'agent',
-        select: 'name emailavatar',
+        select: 'name email avatar',
       },
     })
     .limit(limit)
     .skip(skip);
-  if (!savedProperties.length)
-    throw new ApiError(404, 'No saved properties found.');
-
-  const totalSavedProperties = await SavedProperty.countDocuments({
-    userId: id,
-  });
-
-  const totalPages = Math.ceil(totalSavedProperties / limit);
 
   return { savedProperties, currentPage: pageNo, totalPages };
 };
 
-export { addProperty, savedProperties };
+const deleteSavedProperty = async (id: string) => {
+  const savedProperty = await SavedProperty.findByIdAndDelete(id);
+  if (!savedProperty) throw new ApiError(404, 'No such property exists.');
+};
+
+export { addProperty, savedProperties, deleteSavedProperty };

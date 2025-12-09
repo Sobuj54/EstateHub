@@ -1,7 +1,11 @@
 import ApiResponse from '../../utils/ApiResponse';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { UserDocument } from '../user/user.interface';
-import { addProperty, savedProperties } from './savedProperty.service';
+import {
+  addProperty,
+  deleteSavedProperty,
+  savedProperties,
+} from './savedProperty.service';
 
 const addSavedProperty = asyncHandler(async (req, res) => {
   const { propertyId, userId } = req.body;
@@ -21,4 +25,12 @@ const getSavedProperties = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, result, 'Fetched all properties successfully.'));
 });
 
-export { addSavedProperty, getSavedProperties };
+const deleteASavedProperty = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  await deleteSavedProperty(id);
+  res
+    .status(200)
+    .json(new ApiResponse(200, null, 'Deleted Saved property successfully.'));
+});
+
+export { addSavedProperty, getSavedProperties, deleteASavedProperty };
